@@ -1,0 +1,10 @@
+﻿src/components/ui/Modal.tsx(3,1): error TS6133: 'clsx' is declared but its value is never read.
+src/pages/ConfiguracionCargos.tsx(355,40): error TS2304: Cannot find name 'CheckCircle2'.
+src/pages/Equipos.tsx(15,3): error TS6133: 'Tag' is declared but its value is never read.
+src/pages/Equipos.tsx(16,3): error TS6133: 'Hash' is declared but its value is never read.
+src/pages/Equipos.tsx(19,3): error TS6133: 'Upload' is declared but its value is never read.
+src/pages/Equipos.tsx(464,76): error TS2322: Type 'string' is not assignable to type '"active" | "out_of_service" | "maintenance" | "pending_calibration" | undefined'.
+src/pages/ProgramaCalibracion.tsx(320,87): error TS2345: Argument of type '{}' is not assignable to parameter of type 'Equipment'.
+  Type '{}' is missing the following properties from type 'Equipment': id, name, brand, model, and 9 more.
+src/pages/ProgramaCalibracion.tsx(323,37): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/pages/ProgramaCalibracion.tsx(338,58): error TS2339: Property 'internal_id' does not exist on type '{}'.
