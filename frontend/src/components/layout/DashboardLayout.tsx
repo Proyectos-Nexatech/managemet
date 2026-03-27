@@ -7,7 +7,7 @@ export function DashboardLayout() {
     <div className="flex h-screen bg-[#F7F8FC] text-slate-800 overflow-hidden font-sans">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-[92px] flex items-center justify-between px-10 bg-transparent z-30">
+        <header className="h-[72px] flex items-center justify-between px-10 bg-transparent z-30">
           <div className="flex flex-col">
             <h2 className="text-2xl font-black tracking-tight text-slate-800">Dashboard Metrológico</h2>
             <p className="text-xs font-bold text-slate-400 capitalize">Friday, December 15th 2023</p>
@@ -37,8 +37,8 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        <main className="flex-1 w-full overflow-y-auto px-10 py-4 relative custom-scrollbar">
-          <div className="max-w-[1400px] mx-auto min-h-full pb-20">
+        <main className="flex-1 w-full overflow-y-auto px-10 py-2 relative custom-scrollbar">
+          <div className="max-w-[1400px] mx-auto h-full">
             <Outlet />
           </div>
         </main>

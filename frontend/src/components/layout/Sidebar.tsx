@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -5,8 +6,6 @@ import {
   FileText, 
   Activity, 
   Settings,
-  HelpCircle,
-  MessageSquare,
   CreditCard,
   Layers,
   Users,
@@ -15,39 +14,58 @@ import {
   AlertTriangle,
   ClipboardCheck,
   Calendar as CalendarIcon,
-  Briefcase
+  Briefcase,
+  GitGraph,
+  Target,
+  Thermometer,
+  BookOpen,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
 
 const menuGroups = [
   {
-    title: 'MENU',
+    title: 'INICIO',
     items: [
       { name: 'Dashboard', href: '/', icon: LayoutDashboard, module: 'dashboard' },
-      { name: 'Magnitudes', href: '/magnitudes', icon: Layers, module: 'magnitudes' },
-      { name: 'Equipos', href: '/equipos', icon: Activity, module: 'equipos' },
-      { name: 'Competencias', href: '/competencias', icon: ShieldCheck, module: 'competencias' },
-      { name: 'Programa', href: '/programa', icon: CalendarIcon, module: 'programa' },
     ],
   },
   {
-    title: 'TECHNICAL',
+    title: 'GESTIÓN',
     items: [
-      { name: 'Calibraciones', href: '/calibraciones', icon: CreditCard, module: 'calibraciones' },
+      { name: 'Estructura Org.', href: '/organizacion', icon: GitGraph, module: 'organizacion' },
+      { name: 'Documentos', href: '/documentos', icon: FileText, module: 'documentos' },
+      { name: 'Acciones Correctivas', href: '/acciones-correctivas', icon: ShieldCheck, module: 'acciones_correctivas' },
       { name: 'No Conformidades', href: '/no-conformidades', icon: AlertTriangle, module: 'no_conformidades' },
       { name: 'Auditorías', href: '/auditorias', icon: ClipboardCheck, module: 'auditorias' },
-      { name: 'Documentos', href: '/documentos', icon: FileText, module: 'documentos' },
-      { name: 'Usuarios', href: '/usuarios', icon: Users, module: 'usuarios' },
-      { name: 'Cargos y Perfiles', href: '/config-cargos', icon: Briefcase, module: 'config_cargos' },
+      { name: 'Rev. Dirección', href: '/revision-direccion', icon: Target, module: 'revision_direccion' },
     ],
   },
   {
-    title: 'SUPPORT',
+    title: 'RECURSOS',
     items: [
+      { name: 'Cargos y Perfiles', href: '/config-cargos', icon: Briefcase, module: 'config_cargos' },
+      { name: 'Competencias', href: '/competencias', icon: ShieldCheck, module: 'competencias' },
+      { name: 'Equipos', href: '/equipos', icon: Activity, module: 'equipos' },
+      { name: 'Magnitudes', href: '/magnitudes', icon: Layers, module: 'magnitudes' },
+      { name: 'Condiciones Amb.', href: '/condiciones-ambientales', icon: Thermometer, module: 'condiciones_ambientales' },
+    ],
+  },
+  {
+    title: 'PROCESOS',
+    items: [
+      { name: 'Calibraciones', href: '/calibraciones', icon: CreditCard, module: 'calibraciones' },
+      { name: 'Programa', href: '/programa', icon: CalendarIcon, module: 'programa' },
+      { name: 'Métodos', href: '/metodos', icon: BookOpen, module: 'metodos' },
+      { name: 'Informes', href: '/informes', icon: FileText, module: 'informes' },
+    ],
+  },
+  {
+    title: 'ADMINISTRACIÓN',
+    items: [
+      { name: 'Usuarios', href: '/usuarios', icon: Users, module: 'usuarios' },
       { name: 'Settings', href: '/settings', icon: Settings, module: 'settings' },
-      { name: 'Feedback', href: '/feedback', icon: MessageSquare, module: 'feedback' },
-      { name: 'Help', href: '/help', icon: HelpCircle, module: 'help' },
     ],
   },
 ];
@@ -55,6 +73,27 @@ const menuGroups = [
 export function Sidebar() {
   const location = useLocation();
   const { signOut, can, profile } = useAuth();
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    'INICIO': true,
+    'GESTIÓN': true
+  });
+
+  // Auto-expand group if a nested item is active
+  useEffect(() => {
+    menuGroups.forEach(group => {
+      const hasActiveItem = group.items.some(item => location.pathname === item.href);
+      if (hasActiveItem) {
+        setExpandedGroups(prev => ({ ...prev, [group.title]: true }));
+      }
+    });
+  }, [location.pathname]);
+
+  const toggleGroup = (title: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [title]: !prev[title]
+    }));
+  };
 
   return (
     <div className="flex h-full w-[280px] flex-col bg-white border-r border-slate-200/60 p-6">
@@ -68,17 +107,39 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-8 overflow-y-auto custom-scrollbar pr-2">
+      <nav className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2">
         {menuGroups.map((group) => {
           const visibleItems = group.items.filter(item => can(item.module, 'read'));
           if (visibleItems.length === 0) return null;
 
+          const isExpanded = expandedGroups[group.title];
+          const hasActiveItem = group.items.some(item => location.pathname === item.href);
+
           return (
-            <div key={group.title} className="space-y-2">
-              <h3 className="px-4 text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em]">
-                {group.title}
-              </h3>
-              <div className="space-y-1">
+            <div key={group.title} className="space-y-1">
+              <button
+                onClick={() => toggleGroup(group.title)}
+                className={clsx(
+                  "w-full flex items-center justify-between px-4 py-2 rounded-xl transition-all duration-200",
+                  hasActiveItem && !isExpanded ? "bg-slate-50" : "hover:bg-slate-50"
+                )}
+              >
+                <h3 className={clsx(
+                  "text-[10px] font-black uppercase tracking-[0.15em] transition-colors",
+                  hasActiveItem ? "text-primary" : "text-slate-400"
+                )}>
+                  {group.title}
+                </h3>
+                <ChevronDown className={clsx(
+                  "w-3.5 h-3.5 text-slate-300 transition-transform duration-300",
+                  isExpanded && "rotate-180"
+                )} />
+              </button>
+
+              <div className={clsx(
+                "space-y-1 overflow-hidden transition-all duration-300 ease-in-out",
+                isExpanded ? "max-h-[500px] opacity-100 mt-2" : "max-h-0 opacity-0 pointer-events-none"
+              )}>
                 {visibleItems.map((item) => {
                   const isActive = location.pathname === item.href;
                   return (

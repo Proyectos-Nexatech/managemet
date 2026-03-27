@@ -12,7 +12,10 @@ import {
   Clock, 
   MoreVertical,
   Filter,
-  BarChart4
+  BarChart4,
+  Download,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -109,6 +112,43 @@ export function Calibraciones() {
       alert('Error registrando la calibración. Asegúrate de ejecutar el SQL en Supabase.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const downloadCSVTemplate = () => {
+    // Usamos punto y coma (;) para compatibilidad con Excel en Latinoamérica
+    const headers = "Punto;Valor_Referencia;Valor_Leido;Unidad;Error\n";
+    const exampleRows = "1;10,00;10,02;mm;0,02\n2;20,00;19,98;mm;-0,02\n3;50,00;50,05;mm;0,05";
+    const csvContent = "data:text/csv;charset=utf-8," + headers + exampleRows;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "plantilla_calibracion_managemet.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const rows = text.split('\n');
+        let formattedNotes = "PUNTOS CARGADOS VIA EXCEL/CSV:\n\n";
+        
+        rows.slice(1).forEach(row => {
+          if (row.trim()) {
+            // Detectar si el separador es coma o punto y coma
+            const delimiter = row.includes(';') ? ';' : ',';
+            const [punto, ref, lect, unit, error] = row.split(delimiter);
+            formattedNotes += `• Punto ${punto}: Ref ${ref}${unit} | Leído ${lect}${unit} | Err ${error}\n`;
+          }
+        });
+        setNewCalibration({ ...newCalibration, notes: formattedNotes });
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -376,6 +416,42 @@ export function Calibraciones() {
                       </button>
                     ))}
                   </div>
+               </div>
+            </div>
+            <div className="grid grid-cols-1 gap-8">
+               <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Tabla de Datos / Observaciones</label>
+                     <div className="flex gap-2">
+                        <button 
+                           type="button" onClick={downloadCSVTemplate}
+                           className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-500 text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all border border-blue-100/50"
+                        >
+                           <Download className="w-3.5 h-3.5" /> Descargar Plantilla
+                        </button>
+                        <div className="relative">
+                           <input type="file" accept=".csv" className="hidden" id="csv-upload" onChange={handleFileUpload} />
+                           <button 
+                              type="button" onClick={() => document.getElementById('csv-upload')?.click()}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-500 text-[9px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-all border border-emerald-100/50"
+                           >
+                              <Upload className="w-3.5 h-3.5" /> Cargar CSV con Datos
+                           </button>
+                        </div>
+                     </div>
+                  </div>
+                  <textarea 
+                    rows={4} 
+                    placeholder="Escribe aquí los resultados o carga un archivo CSV para autocompletar..." 
+                    className="w-full bg-slate-50 border-none rounded-3xl py-5 px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none resize-none leading-relaxed" 
+                    value={newCalibration.notes || ''} 
+                    onChange={(e) => setNewCalibration({...newCalibration, notes: e.target.value})} 
+                  />
+                  {newCalibration.notes?.includes('PUNTOS CARGADOS') && (
+                     <div className="flex items-center gap-2 text-[10px] font-black text-emerald-500 uppercase">
+                        <FileSpreadsheet className="w-4 h-4" /> Datos de puntos vinculados correctamente
+                     </div>
+                  )}
                </div>
             </div>
 

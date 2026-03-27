@@ -10,12 +10,13 @@ import {
   MoreVertical,
   ChevronRight,
   TrendingUp,
-  Award
+  Award,
+  Trash2
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { personnelService, type Personnel, type Competency, type PersonnelCompetency } from '../services/personnel';
-import { jobPositionsService, type JobPosition, type JobProfile } from '../services/jobPositions';
+import { jobPositionsService, type JobPosition, type JobProfile, type EducationRequirement } from '../services/jobPositions';
 import { magnitudesService, type Magnitude } from '../services/magnitudes';
 import { Modal } from '../components/ui/Modal';
 import clsx from 'clsx';
@@ -41,6 +42,9 @@ export function Competencias() {
   const [personCompetencies, setPersonCompetencies] = useState<PersonnelCompetency[]>([]);
   const [selectedPersonProfiles, setSelectedPersonProfiles] = useState<JobProfile[]>([]);
   const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
+  const [educationReqs, setEducationReqs] = useState<EducationRequirement[]>([]);
+  const [activeModalTab, setActiveModalTab] = useState<'competencies' | 'education'>('competencies');
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [newPerson, setNewPerson] = useState<Partial<Personnel>>({ 
@@ -104,10 +108,16 @@ export function Competencias() {
       setPersonCompetencies(pc);
       
       let profiles: JobProfile[] = [];
+      let edReqs: EducationRequirement[] = [];
       if (person.job_position_id) {
-        profiles = await jobPositionsService.getJobProfiles(person.job_position_id);
+        [profiles, edReqs] = await Promise.all([
+          jobPositionsService.getJobProfiles(person.job_position_id),
+          jobPositionsService.getEducationRequirements(person.job_position_id)
+        ]);
       }
       setSelectedPersonProfiles(profiles);
+      setEducationReqs(edReqs);
+      setActiveModalTab('competencies');
 
       setIsAuthModalOpen(true);
     } catch (error) {
@@ -121,15 +131,30 @@ export function Competencias() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await personnelService.createPersonnel(newPerson);
+      if (editingPersonId) {
+        await personnelService.updatePersonnel(editingPersonId, newPerson);
+      } else {
+        await personnelService.createPersonnel(newPerson);
+      }
       setIsPersonnelModalOpen(false);
       setNewPerson({ name: '', role: '', area: '', status: 'active', job_position_id: null });
+      setEditingPersonId(null);
       fetchData();
     } catch (error) {
-      console.error('Error creating personnel:', error);
-      alert('Error registrando al personal.');
+      console.error('Error saving personnel:', error);
+      alert('Error guardando los datos del personal.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeletePersonnel = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar a este integrante del personal?')) return;
+    try {
+      await personnelService.deletePersonnel(id);
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting personnel:', error);
     }
   };
 
@@ -176,7 +201,11 @@ export function Competencias() {
             />
           </div>
           <Button 
-            onClick={() => setIsPersonnelModalOpen(true)}
+            onClick={() => {
+              setEditingPersonId(null);
+              setNewPerson({ name: '', role: '', area: '', status: 'active', job_position_id: null });
+              setIsPersonnelModalOpen(true);
+            }}
             className="rounded-[1.25rem] h-13 px-8 font-black flex items-center gap-3 shadow-xl shadow-primary/20 bg-primary border-none transition-all hover:scale-[1.03] active:scale-95 text-white"
           >
             <UserPlus className="w-5 h-5 stroke-[3px]" />
@@ -257,9 +286,24 @@ export function Competencias() {
                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">{person.role}</span>
                     </div>
                  </div>
-                 <button className="p-2.5 text-slate-300 hover:text-slate-800 hover:bg-slate-50 rounded-xl active:scale-90 transition-all">
-                    <MoreVertical className="w-5 h-5" />
-                 </button>
+                 <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => {
+                        setEditingPersonId(person.id);
+                        setNewPerson(person);
+                        setIsPersonnelModalOpen(true);
+                      }}
+                      className="p-2 text-slate-300 hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
+                    >
+                       <MoreVertical className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeletePersonnel(person.id)}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    >
+                       <Trash2 className="w-4 h-4" />
+                    </button>
+                 </div>
               </div>
 
               <div className="flex-1 space-y-4 mb-8">
@@ -303,11 +347,11 @@ export function Competencias() {
       </div>
 
       {/* MODAL: REGISTRAR PERSONAL */}
-      <Modal isOpen={isPersonnelModalOpen} onClose={() => setIsPersonnelModalOpen(false)} title="Nuevo Técnico / Personal">
+      <Modal isOpen={isPersonnelModalOpen} onClose={() => setIsPersonnelModalOpen(false)} title={editingPersonId ? "Editar Personal" : "Nuevo Técnico / Personal"}>
         <form onSubmit={handleAddPerson} className="space-y-6">
            <div className="space-y-2">
              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Nombre Completo</label>
-             <input required placeholder="ej: Ing. Ricardo Pérez" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none" value={newPerson.name} onChange={(e) => setNewPerson({ ...newPerson, name: e.target.value })} />
+             <input required placeholder="ej: Ing. Ricardo Pérez" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none" value={newPerson.name || ''} onChange={(e) => setNewPerson({ ...newPerson, name: e.target.value })} />
            </div>
            <div className="grid grid-cols-1 gap-6">
              <div className="space-y-2">
@@ -345,72 +389,159 @@ export function Competencias() {
 
       {/* MODAL: MATRIZ DE AUTORIZACIÓN (ISO 17025) */}
       <Modal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} title={`Matriz Técnica: ${selectedPerson?.name}`} maxWidthClass="max-w-4xl">
-         <div className="space-y-8 max-h-[70vh] overflow-y-auto pr-4 custom-scrollbar">
-            <p className="text-xs font-bold text-slate-400 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
-               <ShieldCheck className="w-4 h-4 inline-block mr-2 text-primary" />
-               Define las autorizaciones específicas para cada magnitud metrológica.
-            </p>
-
-            <div className="space-y-4">
-               {competencies.length === 0 ? (
-                 <p className="text-center py-8 text-xs font-black text-slate-300 uppercase tracking-widest leading-loose">No hay competencias definidas en el catálogo <br/> vinculadas a magnitudes.</p>
-               ) : competencies.map((comp: Competency) => {
-                 const pc = personCompetencies.find(x => x.competency_id === comp.id);
-                 const levelInfo = pc ? (levelMap[pc.level as keyof typeof levelMap] || levelMap.basic) : levelMap.basic;
-                 
-                 const profile = selectedPersonProfiles.find(p => p.competency_id === comp.id);
-                 const hasBrecha = profile && profile.is_mandatory && (!pc || !pc.is_authorized);
-                 
-                 return (
-                   <Card key={comp.id} className={clsx("p-6 rounded-[2rem] border transition-all shadow-sm", hasBrecha ? "border-red-100 bg-red-50/20" : "border-slate-50 bg-white hover:border-slate-100")}>
-                      <div className="flex items-center justify-between gap-6">
-                         <div className="flex items-center gap-5 flex-1">
-                            <div className="w-14 h-14 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-100">
-                               <span className="text-[8px] font-black text-slate-300 uppercase leading-none mb-1">Magnitud</span>
-                               <span className="text-[11px] font-black text-slate-800 leading-none">{comp.magnitude?.name || 'GEN'}</span>
-                            </div>
-                            <div className="flex flex-col">
-                               <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                                 {comp.name}
-                                 {hasBrecha && <span className="px-2 py-0.5 rounded bg-red-100 text-red-600 text-[9px] font-black uppercase tracking-widest">Brecha</span>}
-                               </h4>
-                               <p className="text-[10px] font-bold text-slate-400 line-clamp-1">{comp.description || 'Sin descripción técnica'}</p>
-                            </div>
-                         </div>
-
-                         <div className="flex items-center gap-8">
-                            {/* Level Visualizer */}
-                            <div className="flex flex-col items-end gap-1.5 w-32">
-                               <span className={clsx("text-[9px] font-black uppercase tracking-widest leading-none px-2 py-1 rounded-lg", levelInfo.color)}>
-                                 {levelInfo.label}
-                               </span>
-                               <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                                  <div className="h-full bg-primary transition-all duration-700" style={{ width: `${levelInfo.progress}%` }}></div>
-                               </div>
-                            </div>
-                            
-                            {/* Toggle Auth */}
-                            <div className="flex items-center gap-3">
-                               <div className="h-8 w-px bg-slate-100" />
-                               <Button 
-                                 onClick={() => handleToggleAuth(comp.id, pc?.is_authorized || false)}
-                                 variant={pc?.is_authorized ? "default" : "outline"}
-                                 className={clsx(
-                                   "rounded-xl h-10 px-4 font-black text-[10px] tracking-widest gap-2 transition-all active:scale-95",
-                                   pc?.is_authorized ? "bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-200" : "border-slate-100 text-slate-400"
-                                 )}
-                               >
-                                 {pc?.is_authorized ? <ShieldCheck className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4 opacity-30" />}
-                                 {pc?.is_authorized ? 'AUTORIZADO' : 'NO AUTORIZADO'}
-                               </Button>
-                            </div>
-                         </div>
-                      </div>
-                   </Card>
-                 );
-               })}
+          <div className="space-y-8 max-h-[70vh] overflow-y-auto pr-4 custom-scrollbar">
+            <div className="flex bg-slate-50 p-1 rounded-2xl border border-slate-100 mb-2">
+              <button 
+                onClick={() => setActiveModalTab('competencies')}
+                className={clsx(
+                  "flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                  activeModalTab === 'competencies' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Perfil de Competencias
+              </button>
+              <button 
+                onClick={() => setActiveModalTab('education')}
+                className={clsx(
+                  "flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                  activeModalTab === 'education' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Requisitos Educativos
+              </button>
             </div>
 
+            {activeModalTab === 'competencies' && (
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-slate-400 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  <span>
+                    <ShieldCheck className="w-4 h-4 inline-block mr-2 text-primary" />
+                    Define las autorizaciones específicas basadas en el perfil del cargo.
+                  </span>
+                  <span className="text-[10px] font-black text-slate-300">ISO 17025: 6.2.2</span>
+                </p>
+
+                {competencies.length === 0 ? (
+                  <p className="text-center py-8 text-xs font-black text-slate-300 uppercase tracking-widest leading-loose">No hay competencias definidas en el catálogo <br/> vinculadas a magnitudes.</p>
+                ) : competencies.map((comp: Competency) => {
+                  const pc = personCompetencies.find(x => x.competency_id === comp.id);
+                  const levelInfo = pc ? (levelMap[pc.level as keyof typeof levelMap] || levelMap.basic) : levelMap.basic;
+                  
+                  const profile = selectedPersonProfiles.find(p => p.competency_id === comp.id);
+                  const hasBrecha = profile && profile.is_mandatory && (!pc || !pc.is_authorized);
+                  const isRequired = !!profile;
+                  
+                  return (
+                    <Card key={comp.id} className={clsx("p-6 rounded-[2rem] border transition-all shadow-sm", hasBrecha ? "border-red-100 bg-red-50/20" : isRequired ? "border-primary/10 bg-white" : "border-slate-50 bg-slate-50/50 opacity-60")}>
+                        <div className="flex items-center justify-between gap-6">
+                          <div className="flex items-center gap-5 flex-1">
+                              <div className="w-14 h-14 bg-white rounded-2xl flex flex-col items-center justify-center border border-slate-100 shadow-sm">
+                                <span className="text-[8px] font-black text-slate-300 uppercase leading-none mb-1">Magnitud</span>
+                                <span className="text-[11px] font-black text-slate-800 leading-none">{comp.magnitude?.name || 'GEN'}</span>
+                              </div>
+                              <div className="flex flex-col">
+                                <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                  {comp.name}
+                                  {hasBrecha && <span className="px-2 py-0.5 rounded bg-red-100 text-red-600 text-[9px] font-black uppercase tracking-widest">Brecha</span>}
+                                  {isRequired && <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[8px] font-black uppercase tracking-widest">Requerido</span>}
+                                </h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <p className="text-[10px] font-bold text-slate-400 line-clamp-1 flex-1">{comp.description || 'Sin descripción técnica'}</p>
+                                  {profile && (
+                                    <span className="text-[9px] font-black text-primary uppercase bg-primary/5 px-2 py-0.5 rounded-lg border border-primary/10">
+                                      Nivel Requerido: {levelMap[profile.required_level].label}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                          </div>
+
+                          <div className="flex items-center gap-8">
+                              {/* Level Visualizer */}
+                              <div className="flex flex-col items-end gap-1.5 w-32">
+                                <span className={clsx("text-[9px] font-black uppercase tracking-widest leading-none px-2 py-1 rounded-lg", levelInfo.color)}>
+                                  {pc ? levelInfo.label : 'Sin Nivel'}
+                                </span>
+                                <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary transition-all duration-700" style={{ width: `${pc ? levelInfo.progress : 0}%` }}></div>
+                                </div>
+                              </div>
+                              
+                              {/* Toggle Auth */}
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-px bg-slate-100" />
+                                <Button 
+                                  onClick={() => handleToggleAuth(comp.id, pc?.is_authorized || false)}
+                                  variant={pc?.is_authorized ? "default" : "outline"}
+                                  className={clsx(
+                                    "rounded-xl h-10 px-4 font-black text-[10px] tracking-widest gap-2 transition-all active:scale-95",
+                                    pc?.is_authorized ? "bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-200" : "border-slate-200 text-slate-400 bg-white"
+                                  )}
+                                >
+                                  {pc?.is_authorized ? <ShieldCheck className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4 opacity-30" />}
+                                  {pc?.is_authorized ? 'AUTORIZADO' : 'NO AUTORIZADO'}
+                                </Button>
+                              </div>
+                          </div>
+                        </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeModalTab === 'education' && (
+              <div className="space-y-6">
+                <p className="text-xs font-bold text-slate-400 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  <span>
+                    <Award className="w-4 h-4 inline-block mr-2 text-primary" />
+                    Revisa y aprueba el cumplimiento de los requisitos educativos para este cargo.
+                  </span>
+                  <span className="text-[10px] font-black text-slate-300">ISO 17025: 6.2.1</span>
+                </p>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {educationReqs.map(req => (
+                    <Card key={req.id} className="p-6 rounded-[2rem] border border-slate-50 bg-white transition-all shadow-sm hover:border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-5">
+                        <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-primary border border-slate-100">
+                          {req.req_type === 'degree' && <div className="font-black text-[10px]">Title</div>}
+                          {req.req_type === 'course' && <div className="font-black text-[10px]">Crs</div>}
+                          {req.req_type === 'experience' && <div className="font-black text-[10px]">Exp</div>}
+                          {req.req_type === 'other' && <Award className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                              {req.req_type === 'degree' ? 'Educación Formal' : req.req_type === 'course' ? 'Formación Especifica' : req.req_type === 'experience' ? 'Experiencia Mínima' : 'Otro Requisito'}
+                            </span>
+                            {req.is_mandatory && (
+                              <span className="px-2 py-0.5 rounded bg-red-50 text-red-500 text-[8px] font-black uppercase tracking-widest">Esencial</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-black text-slate-700">{req.description}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-4">
+                        <Button 
+                          variant="outline"
+                          className="rounded-xl h-10 px-4 font-black text-[10px] tracking-widest gap-2 bg-green-50 text-green-600 border-green-100 hover:bg-green-100"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          REVISADO Y CUMPLE
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                  {educationReqs.length === 0 && (
+                    <div className="p-12 text-center text-slate-300">
+                      <p className="text-xs font-black uppercase tracking-[0.2em]">No hay requisitos educativos <br/> configurados para este cargo.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {/* SEED FOR DEMO if empty competencies */}
             {competencies.length === 0 && (
               <div className="flex justify-center pt-4">
@@ -439,8 +570,8 @@ export function Competencias() {
                   CERRAR MATRIZ TÉCNICA
                </Button>
             </div>
-         </div>
-      </Modal>
+          </div>
+        </Modal>
     </div>
   );
 }

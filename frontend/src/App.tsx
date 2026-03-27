@@ -12,10 +12,48 @@ import { NoConformidades } from './pages/NoConformidades';
 import { Auditorias } from './pages/Auditorias';
 import { Usuarios } from './pages/Usuarios';
 import { ConfiguracionCargos } from './pages/ConfiguracionCargos';
+import { GestionOrganizacional } from './pages/GestionOrganizacional';
+import { AccionesCorrectivas } from './pages/AccionesCorrectivas';
+import { CondicionesAmbientales } from './pages/CondicionesAmbientales';
+import { Metodos } from './pages/Metodos';
+import { RevisionDireccion } from './pages/RevisionDireccion';
+import { Informes } from './pages/Informes';
 import { Login } from './pages/Login';
+import { useEffect } from 'react';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, profile } = useAuth();
+  const isAdmin = profile?.role?.name === 'admin';
+
+  useEffect(() => {
+    // Solo aplicar en producción y para NO administradores
+    if (import.meta.env.PROD && !isAdmin) {
+      const handleContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
+      };
+
+      const handleKeydown = (e: KeyboardEvent) => {
+        // Bloquear F12
+        if (e.key === 'F12') e.preventDefault();
+        
+        // Bloquear Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U (Ver código fuente)
+        if (e.ctrlKey && (
+          (e.shiftKey && (e.key === 'i' || e.key === 'I' || e.key === 'j' || e.key === 'J')) || 
+          e.key === 'u' || e.key === 'U'
+        )) {
+          e.preventDefault();
+        }
+      };
+
+      document.addEventListener('contextmenu', handleContextMenu);
+      document.addEventListener('keydown', handleKeydown);
+
+      return () => {
+        document.removeEventListener('contextmenu', handleContextMenu);
+        document.removeEventListener('keydown', handleKeydown);
+      };
+    }
+  }, [isAdmin]);
 
   if (loading) {
     return (
@@ -48,6 +86,12 @@ function AppContent() {
         <Route path="/auditorias" element={<Auditorias />} />
         <Route path="/usuarios" element={<Usuarios />} />
         <Route path="/config-cargos" element={<ConfiguracionCargos />} />
+        <Route path="/organizacion" element={<GestionOrganizacional />} />
+        <Route path="/acciones-correctivas" element={<AccionesCorrectivas />} />
+        <Route path="/condiciones-ambientales" element={<CondicionesAmbientales />} />
+        <Route path="/metodos" element={<Metodos />} />
+        <Route path="/revision-direccion" element={<RevisionDireccion />} />
+        <Route path="/informes" element={<Informes />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

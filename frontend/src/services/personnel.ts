@@ -45,6 +45,17 @@ export const personnelService = {
     return data as Personnel;
   },
 
+  async updatePersonnel(id: string, updates: Partial<Personnel>) {
+    const { data, error } = await supabase.from('personnel').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data as Personnel;
+  },
+
+  async deletePersonnel(id: string) {
+    const { error } = await supabase.from('personnel').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   // Competency Definitions CRUD
   async getCompetencies() {
     const { data, error } = await supabase
@@ -58,6 +69,17 @@ export const personnelService = {
     const { data, error } = await supabase.from('competencies').insert([comp]).select().single();
     if (error) throw error;
     return data as Competency;
+  },
+
+  async updateCompetency(id: string, comp: Partial<Competency>) {
+    const { data, error } = await supabase.from('competencies').update(comp).eq('id', id).select().single();
+    if (error) throw error;
+    return data as Competency;
+  },
+
+  async deleteCompetency(id: string) {
+    const { error } = await supabase.from('competencies').delete().eq('id', id);
+    if (error) throw error;
   },
 
   // Matrix Operations

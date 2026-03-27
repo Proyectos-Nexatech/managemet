@@ -18,6 +18,8 @@ import { Modal } from '../components/ui/Modal';
 import { PermissionGuard } from '../components/PermissionGuard';
 import { jobPositionsService, type JobPosition, type JobProfile, type EducationRequirement } from '../services/jobPositions';
 import { personnelService, type Competency } from '../services/personnel';
+import { magnitudesService, type Magnitude } from '../services/magnitudes';
+import { useAuth } from '../contexts/AuthContext';
 import clsx from 'clsx';
 
 export function ConfiguracionCargos() {
@@ -29,8 +31,16 @@ export function ConfiguracionCargos() {
   const [profiles, setProfiles] = useState<JobProfile[]>([]);
   const [educationReqs, setEducationReqs] = useState<EducationRequirement[]>([]);
   
+  const [magnitudes, setMagnitudes] = useState<Magnitude[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { profile } = useAuth();
+  const isAdmin = profile?.role?.name === 'admin';
+
+  // Competency Modal
+  const [isCompetencyModalOpen, setIsCompetencyModalOpen] = useState(false);
+  const [editingCompetency, setEditingCompetency] = useState<Competency | null>(null);
+  const [newCompetency, setNewCompetency] = useState<Partial<Competency>>({ name: '', description: '', magnitude_id: null });
 
   // Position Modal
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
@@ -44,12 +54,14 @@ export function ConfiguracionCargos() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [posData, compData] = await Promise.all([
+      const [posData, compData, magData] = await Promise.all([
         jobPositionsService.getJobPositions(),
-        personnelService.getCompetencies()
+        personnelService.getCompetencies(),
+        magnitudesService.getAll()
       ]);
       setPositions(posData);
       setCompetencies(compData);
+      setMagnitudes(magData);
       if (posData.length > 0 && !selectedPosition) {
         setSelectedPosition(posData[0]);
       }
@@ -157,6 +169,34 @@ export function ConfiguracionCargos() {
       fetchPositionDetails(selectedPosition!.id);
     } catch (error) {
       console.error('Error deleting education req:', error);
+    }
+  };
+
+  const handleSaveCompetency = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (editingCompetency) {
+        await personnelService.updateCompetency(editingCompetency.id, newCompetency);
+      } else {
+        await personnelService.createCompetency(newCompetency);
+      }
+      setIsCompetencyModalOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving competency:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteCompetency = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta competencia? Se eliminará de todos los perfiles.')) return;
+    try {
+      await personnelService.deleteCompetency(id);
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting competency:', error);
     }
   };
 
@@ -289,18 +329,53 @@ export function ConfiguracionCargos() {
             {/* PERFILES TAB */}
             {activeTab === 'profiles' && selectedPosition && (
               <Card className="border-none shadow-sm rounded-[2rem] bg-white overflow-hidden">
-                <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-primary">
-                    <Settings2 className="w-6 h-6" />
+                <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-primary">
+                      <Settings2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black text-slate-800">Matriz de Competencias Requeridas</h2>
+                      <p className="text-sm font-bold text-slate-400">Perfil: <span className="text-primary">{selectedPosition.name}</span></p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-black text-slate-800">Matriz de Competencias Requeridas</h2>
-                    <p className="text-sm font-bold text-slate-400">Perfil: <span className="text-primary">{selectedPosition.name}</span></p>
-                  </div>
+                  {isAdmin && (
+                    <Button 
+                      onClick={() => {
+                        setEditingCompetency(null);
+                        setNewCompetency({ name: '', description: '', magnitude_id: null });
+                        setIsCompetencyModalOpen(true);
+                      }}
+                      className="rounded-[1.25rem] h-10 px-6 font-black bg-primary text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      GESTIONAR CATÁLOGO
+                    </Button>
+                  )}
                 </div>
                 <div className="p-6 space-y-6">
                   {competencies.length === 0 ? (
-                    <p className="text-center text-slate-400 py-8">No hay competencias definidas en el sistema.</p>
+                    <div className="space-y-4">
+                      <div className="p-12 text-center text-slate-400 font-bold bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                        No hay competencias definidas en el sistema.
+                      </div>
+                      {isAdmin && (
+                        <div className="flex justify-center">
+                          <Button 
+                            onClick={() => {
+                              setEditingCompetency(null);
+                              setNewCompetency({ name: '', description: '', magnitude_id: null });
+                              setIsCompetencyModalOpen(true);
+                            }}
+                            variant="outline"
+                            className="rounded-2xl font-black"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            CREAR PRIMERA COMPETENCIA
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="border border-slate-100 rounded-3xl overflow-hidden">
                       <table className="w-full text-left border-collapse">
@@ -309,6 +384,7 @@ export function ConfiguracionCargos() {
                             <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Competencia</th>
                             <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nivel Requerido</th>
                             <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
+                            {isAdmin && <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acciones</th>}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -360,6 +436,28 @@ export function ConfiguracionCargos() {
                                     <span className="text-xs font-bold text-slate-400">-</span>
                                   )}
                                 </td>
+                                {isAdmin && (
+                                  <td className="p-4 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <button 
+                                        onClick={() => {
+                                          setEditingCompetency(comp);
+                                          setNewCompetency(comp);
+                                          setIsCompetencyModalOpen(true);
+                                        }}
+                                        className="p-2 text-slate-400 hover:text-primary transition-colors"
+                                      >
+                                        <Edit2 className="w-4 h-4" />
+                                      </button>
+                                      <button 
+                                        onClick={() => handleDeleteCompetency(comp.id)}
+                                        className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
@@ -488,6 +586,36 @@ export function ConfiguracionCargos() {
             <Button type="submit" disabled={isSubmitting} className="flex-1 rounded-2xl font-black bg-primary text-white">
               <Plus className="w-4 h-4 mr-2" />
               AÑADIR
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Competency Modal */}
+      <Modal isOpen={isCompetencyModalOpen} onClose={() => setIsCompetencyModalOpen(false)} title={editingCompetency ? "Editar Competencia" : "Nueva Competencia"}>
+        <form onSubmit={handleSaveCompetency} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Nombre de la Competencia</label>
+            <input required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newCompetency.name || ''} onChange={(e) => setNewCompetency({...newCompetency, name: e.target.value})} placeholder="Ej: Calibración de Masa" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Magnitud Relacionada (Opcional)</label>
+            <select className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newCompetency.magnitude_id || ''} onChange={(e) => setNewCompetency({...newCompetency, magnitude_id: e.target.value || null})}>
+              <option value="">General / Ninguna</option>
+              {magnitudes.map(mag => (
+                <option key={mag.id} value={mag.id}>{mag.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Descripción</label>
+            <textarea className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 h-24 resize-none" value={newCompetency.description || ''} onChange={(e) => setNewCompetency({...newCompetency, description: e.target.value})} placeholder="Detalles de la competencia..." />
+          </div>
+          <div className="pt-4 flex gap-3">
+            <Button type="button" variant="outline" onClick={() => setIsCompetencyModalOpen(false)} className="flex-1 rounded-2xl font-black">CANCELAR</Button>
+            <Button type="submit" disabled={isSubmitting} className="flex-1 rounded-2xl font-black bg-primary text-white">
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              {editingCompetency ? 'ACTUALIZAR' : 'CREAR'}
             </Button>
           </div>
         </form>

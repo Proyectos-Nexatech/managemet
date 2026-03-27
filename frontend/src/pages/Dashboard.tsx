@@ -1,32 +1,66 @@
 import { 
   Activity, 
   TrendingUp,
-  Package,
-  Eye,
   ChevronDown,
-  ShoppingCart
+  ShieldAlert,
+  Thermometer,
+  FileCheck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { correctiveActionService } from '../services/correctiveActions';
+import { environmentalService } from '../services/environmentalRecords';
+import { resultReportService } from '../services/resultReports';
 import clsx from 'clsx';
 
 export function Dashboard() {
+  const [isoStats, setIsoStats] = useState({
+    corrective: 0,
+    outOfLimits: 0,
+    pendingReports: 0,
+    totalEquip: 0
+  });
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [ca, er, rr] = await Promise.all([
+          correctiveActionService.getAll(),
+          environmentalService.getRecords(50),
+          resultReportService.getAll()
+        ]);
+
+        setIsoStats({
+          corrective: ca.filter((a: any) => a.status === 'open' || a.status === 'in_progress').length,
+          outOfLimits: er.filter((r: any) => !r.within_limits).length,
+          pendingReports: rr.filter((r: any) => r.status === 'draft' || r.status === 'review').length,
+          totalEquip: 34760
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
   const stats = [
-    { title: 'Certificados Emitidos', value: '1,284', trend: '+2.08%', trendType: 'up', icon: Package, color: 'bg-primary' },
-    { title: 'Equipos en Sistema', value: '34,760', trend: '+12.4%', trendType: 'up', icon: Activity, color: 'bg-slate-100' },
-    { title: 'Patrones de Medida', value: '14,987', trend: '-2.08%', trendType: 'down', icon: Eye, color: 'bg-slate-100' },
-    { title: 'Instrumentos Activos', value: '12,987', trend: '+12.1%', trendType: 'up', icon: ShoppingCart, color: 'bg-slate-100' },
+    { title: 'Informes Pendientes', value: isoStats.pendingReports, trend: '+2', trendType: 'up', icon: FileCheck, color: 'bg-primary' },
+    { title: 'Equipos Activos', value: '34,760', trend: '+12.4%', trendType: 'up', icon: Activity, color: 'bg-slate-100' },
+    { title: 'Acciones Correctivas', value: isoStats.corrective, trend: 'Pendientes', trendType: isoStats.corrective > 0 ? 'down' : 'up', icon: ShieldAlert, color: 'bg-slate-100' },
+    { title: 'Alertas Ambientales', value: isoStats.outOfLimits, trend: 'Críticos', trendType: isoStats.outOfLimits > 0 ? 'down' : 'up', icon: Thermometer, color: 'bg-slate-100' },
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150">
+    <div className="h-full flex flex-col space-y-4 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150">
       {/* Top Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
         {stats.map((stat, i) => (
           <Card key={i} className={clsx(
             "border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2.5rem] overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_20px_60px_rgb(0,0,0,0.05)]",
             stat.color === 'bg-primary' ? 'bg-primary text-white' : 'bg-white text-slate-800'
           )}>
-            <CardContent className="p-8 flex flex-col gap-8 relative overflow-hidden group">
+            <CardContent className="p-4 lg:p-6 flex flex-col gap-4 relative overflow-hidden group">
               <div className="flex justify-between items-start">
                  <div className={clsx(
                    "w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-500 group-hover:rotate-6 group-hover:scale-110",
@@ -70,10 +104,10 @@ export function Dashboard() {
       </div>
 
       {/* Main Content Area Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 pb-4">
         {/* Left: Huge Chart Card */}
-        <Card className="lg:col-span-2 border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[3rem] bg-white p-10 group overflow-hidden relative">
-          <div className="flex items-center justify-between mb-12">
+        <Card className="lg:col-span-2 border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 lg:p-8 group overflow-hidden relative flex flex-col">
+          <div className="flex items-center justify-between mb-6 flex-shrink-0">
              <div className="space-y-1">
                <h3 className="text-xl font-black tracking-tight text-slate-800">Tendencia de Calibración</h3>
                <p className="text-xs font-bold text-slate-400">Track your laboratory efficiency</p>
@@ -97,11 +131,11 @@ export function Dashboard() {
              </div>
           </div>
 
-          <div className="h-[360px] w-full flex items-end justify-between px-2 pb-6 relative">
+          <div className="flex-1 w-full flex items-end justify-between px-2 pb-6 relative min-h-0">
              {/* Mocking bar chart as seen in image */}
              {[45, 78, 56, 92, 45, 68, 88, 55, 60, 42, 75, 50].map((h, i) => (
-                <div key={i} className="flex flex-col items-center gap-4 group/bar w-full max-w-[24px]">
-                   <div className="w-full flex flex-col justify-end h-72 gap-1 rounded-full bg-transparent overflow-hidden">
+                <div key={i} className="flex flex-col items-center gap-2 group/bar w-full max-w-[24px]">
+                   <div className="w-full flex flex-col justify-end h-full gap-1 rounded-full bg-transparent overflow-hidden">
                       <div 
                         className="w-full bg-slate-100 rounded-full transition-all duration-1000 group-hover/bar:bg-slate-200" 
                         style={{ height: `${h * 0.8}%` }} 
@@ -136,11 +170,11 @@ export function Dashboard() {
         </Card>
 
         {/* Right Area: Stats stack */}
-        <div className="space-y-8 flex flex-col h-full">
+        <div className="space-y-4 flex flex-col h-full">
            {/* Half Donut Card */}
-           <Card className="flex-1 border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[3rem] bg-white p-10 group overflow-hidden relative">
+           <Card className="flex-1 border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 lg:p-8 group overflow-hidden relative flex flex-col">
               <div className="flex flex-col justify-between h-full">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-4 flex-shrink-0">
                   <div className="space-y-1">
                     <h3 className="text-xl font-black tracking-tight text-slate-800">Estadísticas por Magnitud</h3>
                     <p className="text-xs font-bold text-slate-400">Track your product sales</p>
@@ -150,7 +184,7 @@ export function Dashboard() {
                   </button>
                 </div>
 
-                <div className="relative h-64 w-full mb-12 flex items-center justify-center">
+                <div className="relative flex-1 w-full mb-6 flex items-center justify-center min-h-0">
                    {/* Multiple concentric half or full circles mockup */}
                    <div className="absolute w-44 h-44 rounded-full border-[12px] border-slate-50" />
                    <div className="absolute w-44 h-44 rounded-full border-[12px] border-primary border-t-transparent border-r-transparent group-hover:rotate-12 transition-transform duration-700 shadow-lg shadow-primary/10" />
@@ -170,7 +204,7 @@ export function Dashboard() {
                    </div>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t border-slate-50">
+                <div className="space-y-2 pt-4 border-t border-slate-50 flex-shrink-0">
                    {[
                      { name: 'Temperatura', count: '2.487', trend: '+1.8%', type: 'up' },
                      { name: 'Presión', count: '1.828', trend: '+2.3%', type: 'up' },
