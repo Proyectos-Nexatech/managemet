@@ -19,6 +19,7 @@ import { Metodos } from './pages/Metodos';
 import { RevisionDireccion } from './pages/RevisionDireccion';
 import { Informes } from './pages/Informes';
 import { Login } from './pages/Login';
+import { Settings } from './pages/Settings';
 import { useEffect } from 'react';
 
 function AppContent() {
@@ -92,6 +93,7 @@ function AppContent() {
         <Route path="/metodos" element={<Metodos />} />
         <Route path="/revision-direccion" element={<RevisionDireccion />} />
         <Route path="/informes" element={<Informes />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

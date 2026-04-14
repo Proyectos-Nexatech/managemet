@@ -87,10 +87,10 @@ export function Dashboard() {
                   {stat.value}
                 </p>
                 {stat.color === 'bg-primary' && (
-                  <p className="text-[10px] font-bold text-white/50 mt-2">Products vs last month</p>
+                  <p className="text-[10px] font-bold text-white/50 mt-2">vs el mes pasado</p>
                 )}
                 {stat.color !== 'bg-primary' && (
-                   <p className="text-[10px] font-bold text-slate-300 mt-2">Users vs last month</p>
+                   <p className="text-[10px] font-bold text-slate-300 mt-2">vs el mes pasado</p>
                 )}
               </div>
               
@@ -177,27 +177,27 @@ export function Dashboard() {
                 <div className="flex items-center justify-between mb-4 flex-shrink-0">
                   <div className="space-y-1">
                     <h3 className="text-xl font-black tracking-tight text-slate-800">Estadísticas por Magnitud</h3>
-                    <p className="text-xs font-bold text-slate-400">Track your product sales</p>
+                    <p className="text-xs font-bold text-slate-400">Distribución de activos por tipo</p>
                   </div>
                   <button className="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-slate-400 hover:text-primary hover:bg-white transition-all">
                     <ChevronDown className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="relative flex-1 w-full mb-6 flex items-center justify-center min-h-0">
-                   {/* Multiple concentric half or full circles mockup */}
-                   <div className="absolute w-44 h-44 rounded-full border-[12px] border-slate-50" />
-                   <div className="absolute w-44 h-44 rounded-full border-[12px] border-primary border-t-transparent border-r-transparent group-hover:rotate-12 transition-transform duration-700 shadow-lg shadow-primary/10" />
+                <div className="relative flex-1 w-full mb-6 flex items-center justify-center min-h-[220px]">
+                   {/* Background rings for better depth */}
+                   <div className="absolute w-52 h-52 rounded-full border-[10px] border-slate-50" />
+                   <div className="absolute w-52 h-52 rounded-full border-[10px] border-primary border-t-transparent border-r-transparent group-hover:rotate-[30deg] transition-transform duration-1000 shadow-lg shadow-primary/5" />
                    
-                   <div className="absolute w-32 h-32 rounded-full border-[10px] border-slate-50" />
-                   <div className="absolute w-32 h-32 rounded-full border-[10px] border-emerald-400 border-l-transparent border-t-transparent group-hover:-rotate-12 transition-transform duration-700 shadow-lg shadow-emerald-400/10" />
+                   <div className="absolute w-40 h-40 rounded-full border-[10px] border-slate-50" />
+                   <div className="absolute w-40 h-40 rounded-full border-[10px] border-emerald-400 border-l-transparent border-t-transparent group-hover:-rotate-[45deg] transition-transform duration-1000 shadow-lg shadow-emerald-400/5" />
 
-                   <div className="absolute w-20 h-20 rounded-full border-[8px] border-slate-50" />
-                   <div className="absolute w-20 h-20 rounded-full border-[8px] border-red-400 border-b-transparent border-l-transparent group-hover:rotate-45 transition-transform duration-700 shadow-lg shadow-red-400/10" />
+                   <div className="absolute w-28 h-28 rounded-full border-[10px] border-slate-50" />
+                   <div className="absolute w-28 h-28 rounded-full border-[10px] border-red-400 border-b-transparent border-l-transparent group-hover:rotate-[60deg] transition-transform duration-1000 shadow-lg shadow-red-400/5" />
                    
-                   <div className="text-center pt-2">
-                     <p className="text-3xl font-black tracking-tighter text-slate-800">9.829</p>
-                     <p className="text-[10px] font-black tracking-[0.15em] text-slate-400 uppercase mt-[-2px]">Sales</p>
+                   <div className="text-center z-10 bg-white/80 backdrop-blur-sm rounded-full p-4">
+                     <p className="text-3xl font-black tracking-tighter text-slate-800 leading-none">9.829</p>
+                     <p className="text-[10px] font-black tracking-[0.15em] text-slate-400 uppercase mt-1">Total Equipos</p>
                      <div className="inline-flex items-center gap-1 bg-green-50 text-green-500 text-[9px] font-black px-2 py-0.5 rounded-full mt-2">
                        +5.34%
                      </div>
