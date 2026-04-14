@@ -19,7 +19,8 @@ import {
   Target,
   Thermometer,
   BookOpen,
-  ChevronDown
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
@@ -70,7 +71,7 @@ const menuGroups = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation();
   const { signOut, can, profile } = useAuth();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -96,15 +97,25 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full w-[280px] flex-col bg-white border-r border-slate-200/60 p-6">
-      <div className="flex items-center gap-3 px-2 mb-10">
-        <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center overflow-hidden border border-slate-100 shadow-sm">
-          <img src="/logo.png" alt="ManageMet Logo" className="w-full h-full object-contain p-1.5" />
+    <div className="flex h-full w-[280px] flex-col bg-white border-r border-slate-200/60 p-6 relative">
+      <div className="flex items-center justify-between px-2 mb-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center overflow-hidden border border-slate-100 shadow-sm">
+            <img src="/logo.png" alt="ManageMet Logo" className="w-full h-full object-contain p-1.5" />
+          </div>
+          <div className="flex flex-col">
+            <h1 className="text-xl font-black tracking-tight text-slate-800 leading-none">ManageMet</h1>
+            {profile && <span className="text-[9px] font-black text-primary uppercase tracking-widest mt-1 opacity-60">{profile.role?.name.replace('_', ' ')}</span>}
+          </div>
         </div>
-        <div className="flex flex-col">
-          <h1 className="text-xl font-black tracking-tight text-slate-800 leading-none">ManageMet</h1>
-          {profile && <span className="text-[9px] font-black text-primary uppercase tracking-widest mt-1 opacity-60">{profile.role?.name.replace('_', ' ')}</span>}
-        </div>
+
+        {/* Mobile Close Button */}
+        <button 
+          onClick={onClose}
+          className="lg:hidden p-2 text-slate-400 hover:text-slate-900 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
       </div>
 
       <nav className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2">
@@ -152,6 +163,7 @@ export function Sidebar() {
                           ? "bg-primary text-white shadow-lg shadow-primary/25" 
                           : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                       )}
+                      onClick={() => onClose?.()}
                     >
                       <div className="flex items-center gap-3">
                         <item.icon className={clsx("w-5 h-5", isActive ? "text-white" : "text-slate-400 group-hover:text-slate-900")} />

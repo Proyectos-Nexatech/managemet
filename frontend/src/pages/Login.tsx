@@ -26,8 +26,8 @@ export function Login() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 animate-in fade-in duration-1000">
-      <Card className="w-full max-w-md rounded-[3rem] border-none shadow-2xl shadow-slate-200 overflow-hidden bg-white">
-        <div className="p-12 space-y-8">
+      <Card className="w-full max-w-md rounded-[2.5rem] lg:rounded-[3rem] border-none shadow-2xl shadow-slate-200 overflow-hidden bg-white">
+        <div className="p-8 sm:p-12 space-y-8">
           <div className="text-center space-y-2">
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
               <LogIn className="w-8 h-8 text-primary" />

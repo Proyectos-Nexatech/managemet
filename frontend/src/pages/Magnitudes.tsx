@@ -144,8 +144,8 @@ export function Magnitudes() {
           <p className="text-xs font-bold text-slate-400 font-sans">Gestiona las magnitudes físicas y sus configuraciones base (ISO 17025)</p>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="relative w-64">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+          <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input 
               type="text" 
@@ -161,10 +161,10 @@ export function Magnitudes() {
               setNewMagnitude({ name: '', description: '' });
               setIsModalOpen(true);
             }}
-            className="rounded-2xl h-12 px-8 font-bold flex items-center gap-2 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 bg-primary text-white border-0"
+            className="rounded-2xl h-12 px-6 lg:px-8 font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 bg-primary text-white border-0"
           >
             <Plus className="w-5 h-5" />
-            Nueva Magnitud
+            <span className="whitespace-nowrap">Nueva Magnitud</span>
           </Button>
         </div>
       </div>

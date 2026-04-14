@@ -131,7 +131,8 @@ export function Dashboard() {
              </div>
           </div>
 
-          <div className="flex-1 w-full flex items-end justify-between px-2 pb-6 relative min-h-0">
+          <div className="flex-1 w-full overflow-x-auto lg:overflow-x-visible custom-scrollbar relative min-h-0">
+            <div className="flex items-end justify-between px-2 pb-6 min-w-[700px] lg:min-w-0 h-full relative">
              {/* Mocking bar chart as seen in image */}
              {[45, 78, 56, 92, 45, 68, 88, 55, 60, 42, 75, 50].map((h, i) => (
                 <div key={i} className="flex flex-col items-center gap-2 group/bar w-full max-w-[24px]">
@@ -167,7 +168,8 @@ export function Dashboard() {
                 </div>
              </div>
           </div>
-        </Card>
+        </div>
+      </Card>
 
         {/* Right Area: Stats stack */}
         <div className="space-y-4 flex flex-col h-full">
