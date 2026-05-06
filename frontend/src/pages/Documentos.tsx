@@ -60,6 +60,7 @@ export function Documentos() {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'approvals'>('details');
+  const [versions, setVersions] = useState<any[]>([]);
   const [approvals, setApprovals] = useState<any[]>([]);
   
   // CSV Import States

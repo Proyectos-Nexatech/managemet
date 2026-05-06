@@ -12,7 +12,6 @@ import {
   XCircle,
   Clock,
   Filter,
-  ChevronRight,
   Camera,
   Image as ImageIcon,
   X,
@@ -20,7 +19,6 @@ import {
   Upload,
   FileSpreadsheet
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { equipmentService, type Equipment } from '../services/equipment';
 import { magnitudesService, type Magnitude } from '../services/magnitudes';
