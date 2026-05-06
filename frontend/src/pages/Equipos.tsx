@@ -15,7 +15,10 @@ import {
   ChevronRight,
   Camera,
   Image as ImageIcon,
-  X
+  X,
+  Download,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,16 +72,22 @@ export function Equipos() {
     status: 'active',
     image_url: null,
     calibration_period_days: 365,
-    last_calibration_date: null
+    last_calibration_date: null,
+    classification: null
   });
 
   // Image Preview State
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Delete Modal State
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [equipmentToDelete, setEquipmentToDelete] = useState<Equipment | null>(null);
+
+  // CSV Import State
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     try {
@@ -145,6 +154,76 @@ export function Equipos() {
     }
   };
 
+  const handleDownloadTemplate = () => {
+    if (!confirm('¿Deseas descargar la plantilla CSV para la carga masiva de equipos?')) return;
+    
+    // Using semicolon (;) for better compatibility with Excel in Latin America
+    const headers = ['Nombre del Equipo', 'Marca', 'Modelo', 'Número de Serie', 'ID Interno', 'ID Magnitud (UUID)', 'Periodo Calibración (Días)', 'Fecha Última Calibración (AAAA-MM-DD)', 'Clasificación'];
+    const example = ['Manómetro Digital', 'Fluke', '700G', 'SN123456', 'PAT-001', magnitudes[0]?.id || 'f4e33caf-9053-400c-8512-8e9b8d9e5536', '365', '2024-01-01', 'Equipo de Trabajo'];
+    
+    // Add UTF-8 BOM (\ufeff) so Excel recognizes special characters like accents
+    const csvContent = '\ufeff' + [headers, example].map(row => row.join(';')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'plantilla_inventario_equipos.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCsvFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        // Handle both comma and semicolon just in case
+        const delimiter = text.includes(';') ? ';' : ',';
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        const data = lines.slice(1).map(line => line.split(delimiter));
+        setCsvPreview(data);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvFile || csvPreview.length === 0) return;
+    if (!confirm(`¿Estás seguro de cargar ${csvPreview.length} equipos al inventario?`)) return;
+
+    setIsSubmitting(true);
+    try {
+      const equipmentToCreate = csvPreview.map(row => ({
+        name: row[0],
+        brand: row[1],
+        model: row[2],
+        serial_number: row[3],
+        internal_id: row[4],
+        magnitude_id: row[5],
+        status: 'active' as const,
+        calibration_period_days: parseInt(row[6]) || 365,
+        last_calibration_date: row[7] || null,
+        classification: row[8] as any || null
+      }));
+
+      await equipmentService.bulkCreate(equipmentToCreate);
+      setIsCsvModalOpen(false);
+      setCsvFile(null);
+      setCsvPreview([]);
+      fetchData();
+      alert('Carga masiva completada con éxito.');
+    } catch (error) {
+      console.error('Error in bulk create:', error);
+      alert('Error en la carga masiva. Verifica los IDs de magnitud y el formato del archivo.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!equipmentToDelete) return;
     setIsSubmitting(true);
@@ -164,7 +243,7 @@ export function Equipos() {
   const resetForm = () => {
     setEditingEquipment(null);
     setNewEquipment({
-      name: '', brand: '', model: '', serial_number: '', internal_id: '', magnitude_id: '', status: 'active', image_url: null, calibration_period_days: 365, last_calibration_date: null
+      name: '', brand: '', model: '', serial_number: '', internal_id: '', magnitude_id: '', status: 'active', image_url: null, calibration_period_days: 365, last_calibration_date: null, classification: null
     });
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -182,7 +261,8 @@ export function Equipos() {
       status: equipment.status,
       image_url: equipment.image_url,
       calibration_period_days: equipment.calibration_period_days || 365,
-      last_calibration_date: equipment.last_calibration_date
+      last_calibration_date: equipment.last_calibration_date,
+      classification: equipment.classification
     });
     setImagePreview(equipment.image_url);
     setIsModalOpen(true);
@@ -230,23 +310,38 @@ export function Equipos() {
              </div>
            </div>
 
-           <PermissionGuard module="equipos" action="create">
+           <div className="flex items-center gap-3">
              <Button 
-              onClick={() => { resetForm(); setIsModalOpen(true); }}
-              className="rounded-[1.25rem] h-12 px-8 font-black flex items-center gap-3 shadow-xl shadow-primary/20 bg-primary text-white border-none transition-all hover:scale-[1.03] active:scale-95 text-xs tracking-wide"
-             >
-              <Plus className="w-5 h-5 stroke-[3px]" />
-              NUEVO REGISTRO
-            </Button>
-           </PermissionGuard>
+                onClick={() => setIsCsvModalOpen(true)}
+                variant="outline"
+                className="rounded-[1.25rem] h-12 px-6 font-black flex items-center gap-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition-all text-xs tracking-wide"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                IMPORTAR CSV
+              </Button>
+
+              <PermissionGuard module="equipos" action="create">
+                <Button 
+                  onClick={() => { resetForm(); setIsModalOpen(true); }}
+                  className="rounded-[1.25rem] h-12 px-8 font-black flex items-center gap-3 shadow-xl shadow-primary/20 bg-primary text-white border-none transition-all hover:scale-[1.03] active:scale-95 text-xs tracking-wide"
+                >
+                  <Plus className="w-5 h-5 stroke-[3px]" />
+                  NUEVO REGISTRO
+                </Button>
+              </PermissionGuard>
+           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-8">
+      <div className="bg-white rounded-[2.5rem] shadow-[0_12px_45px_-12px_rgba(0,0,0,0.05)] border border-slate-50 overflow-hidden transition-all duration-500">
         {loading ? (
-          [1,2,3,4,5,6].map(i => <div key={i} className="h-80 bg-slate-100/50 rounded-[3rem] animate-pulse" />)
+          <div className="p-12 space-y-6">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="h-16 bg-slate-50 rounded-2xl animate-pulse" />
+            ))}
+          </div>
         ) : filteredEquipment.length === 0 ? (
-          <div className="col-span-full h-96 flex flex-col items-center justify-center text-center p-12 bg-white rounded-[4rem] border-2 border-dashed border-slate-100 shadow-sm">
+          <div className="h-96 flex flex-col items-center justify-center text-center p-12">
              <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-8 ring-8 ring-slate-50/50">
                 <Monitor className="w-10 h-10 text-slate-200" />
              </div>
@@ -254,99 +349,115 @@ export function Equipos() {
              <p className="text-sm font-bold text-slate-400 max-w-sm">No hay instrumentos que coincidan con tus filtros actuales.</p>
           </div>
         ) : (
-          filteredEquipment.map((equipment: Equipment) => {
-            const StatusIcon = statusIconMap[equipment.status] || Monitor;
-            const statusClass = statusColorMap[equipment.status] || 'bg-slate-50 text-slate-400';
-            
-            return (
-              <Card key={equipment.id} className="border-none shadow-[0_12px_45px_-12px_rgba(0,0,0,0.05)] rounded-[3rem] bg-white group hover:scale-[1.03] hover:shadow-[0_45px_100px_-20px_rgba(0,0,0,0.08)] transition-all duration-500 overflow-hidden border border-white hover:border-slate-100 flex flex-col">
-                <CardContent className="p-0 flex flex-col h-full flex-1 relative">
-                  {/* Image Placeholder or Actual Image */}
-                  <div className="h-40 w-full bg-slate-50 relative overflow-hidden flex items-center justify-center transition-all duration-500 group-hover:bg-slate-100 p-4">
-                     {equipment.image_url ? (
-                       <img src={equipment.image_url} alt={equipment.name} className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-105" />
-                     ) : (
-                       <ImageIcon className="w-10 h-10 text-slate-200 group-hover:scale-110 transition-transform duration-500" />
-                     )}
-                     <div className="absolute top-4 left-6 flex flex-col gap-1">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">ID Interno</span>
-                        <span className="text-[11px] font-black text-slate-700 bg-white/80 backdrop-blur-md px-3 py-1 rounded-lg border border-slate-100 shadow-sm">
-                          {equipment.internal_id || 'PROTOTYPE'}
-                        </span>
-                     </div>
-                     <div className="absolute top-4 right-6 flex gap-1.5 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                        <button onClick={() => handleEdit(equipment)} className="p-2.5 bg-white/90 backdrop-blur-md text-slate-600 hover:text-primary hover:bg-white rounded-xl shadow-xl active:scale-90 transition-all">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => { setEquipmentToDelete(equipment); setIsDeleteOpen(true); }} className="p-2.5 bg-white/90 backdrop-blur-md text-slate-600 hover:text-red-500 hover:bg-white rounded-xl shadow-xl active:scale-90 transition-all focus:outline-none">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                     </div>
-                  </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-slate-50">
+                  <th className="text-left py-6 px-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID / Equipo</th>
+                  <th className="text-left py-6 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Clasificación</th>
+                  <th className="text-left py-6 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Magnitud & Marca</th>
+                  <th className="text-left py-6 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Trazabilidad</th>
+                  <th className="text-left py-6 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
+                  <th className="text-right py-6 px-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredEquipment.map((equipment: Equipment) => {
+                  const StatusIcon = statusIconMap[equipment.status] || Monitor;
+                  const statusClass = statusColorMap[equipment.status] || 'bg-slate-50 text-slate-400';
+                  const magnitudeName = (equipment as any).magnitude?.name || 'General';
 
-                  <div className="p-8 flex-1 flex flex-col">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-2 h-2 rounded-full bg-primary ring-4 ring-primary/10" />
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">{(equipment as unknown as { magnitude: { name: string } }).magnitude?.name}</span>
-                    </div>
-                    <h3 className="text-2xl font-black text-slate-800 mb-4 truncate leading-none capitalize" title={equipment.name}>{equipment.name}</h3>
-                    
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                       <div className="flex flex-col gap-1">
-                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Marca</span>
-                         <span className="text-xs font-bold text-slate-600 truncate">{equipment.brand || '-'}</span>
-                       </div>
-                       <div className="flex flex-col gap-1">
-                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Modelo</span>
-                         <span className="text-xs font-bold text-slate-600 truncate">{equipment.model || '-'}</span>
-                       </div>
-                    </div>
+                  // Calibration Logic
+                  let calibrationStatus = { label: 'Vigente', color: 'bg-green-500 shadow-green-100' };
+                  let nextDate = 'N/A';
+                  if (equipment.last_calibration_date) {
+                    const next = addDays(new Date(equipment.last_calibration_date), equipment.calibration_period_days || 365);
+                    nextDate = format(next, 'dd/MM/yy');
+                    const diff = differenceInDays(next, new Date());
+                    if (diff < 0) calibrationStatus = { label: 'Vencido', color: 'bg-red-500 shadow-red-100' };
+                    else if (diff <= 30) calibrationStatus = { label: 'Próximo', color: 'bg-orange-500 shadow-orange-100' };
+                  }
 
-                    <div className="space-y-3 mb-8 pt-4 border-t border-slate-50">
-                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trazabilidad Metrológica</span>
-                       <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
-                             <span className="text-[9px] font-bold text-slate-400">Última: {equipment.last_calibration_date ? format(new Date(equipment.last_calibration_date), 'dd/MM/yy') : 'N/A'}</span>
-                             {equipment.last_calibration_date && (
-                                <span className="text-[9px] font-bold text-slate-500">
-                                   Próxima: {format(addDays(new Date(equipment.last_calibration_date), equipment.calibration_period_days || 365), 'dd/MM/yy')}
-                                </span>
-                             )}
+                  return (
+                    <tr key={equipment.id} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="py-6 px-8">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-100 group-hover:bg-white transition-colors">
+                            {equipment.image_url ? (
+                              <img src={equipment.image_url} alt={equipment.name} className="w-full h-full object-contain" />
+                            ) : (
+                              <ImageIcon className="w-6 h-6 text-slate-200" />
+                            )}
                           </div>
-                          {(() => {
-                             if (!equipment.last_calibration_date) return null;
-                             const next = addDays(new Date(equipment.last_calibration_date), equipment.calibration_period_days || 365);
-                             const diff = differenceInDays(next, new Date());
-                             let stat = { label: 'Vigente', color: 'bg-green-500 shadow-green-100' };
-                             if (diff < 0) stat = { label: 'Vencido', color: 'bg-red-500 shadow-red-100' };
-                             else if (diff <= 30) stat = { label: 'Próximo', color: 'bg-orange-500 shadow-orange-100' };
-                             
-                             return (
-                                <div className={clsx("px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-wider shadow-lg", stat.color)}>
-                                   {stat.label}
-                                </div>
-                             );
-                          })()}
-                       </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-6 border-t border-slate-50 mt-auto">
-                       <div className={clsx("flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black transition-all duration-300 group-hover:shadow-lg shadow-sm border-transparent", statusClass)}>
-                          <StatusIcon className="w-4 h-4" />
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[9px] font-black text-primary uppercase tracking-widest">{equipment.internal_id || 'SIN ID'}</span>
+                            <span className="text-sm font-black text-slate-800 leading-tight capitalize">{equipment.name}</span>
+                            <span className="text-[10px] font-bold text-slate-400 leading-tight">S/N: {equipment.serial_number || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-6 px-6">
+                        <div className="flex flex-col">
+                           <span className={clsx(
+                             "text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-wider w-fit",
+                             equipment.classification === 'Equipo de Referencia' ? "bg-purple-50 text-purple-600 border border-purple-100" :
+                             equipment.classification === 'Equipo de Trabajo' ? "bg-blue-50 text-blue-600 border border-blue-100" :
+                             "bg-slate-50 text-slate-500 border border-slate-100"
+                           )}>
+                             {equipment.classification || 'Sin Clasificar'}
+                           </span>
+                        </div>
+                      </td>
+                      <td className="py-6 px-6">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                             <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">{magnitudeName}</span>
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-500">{equipment.brand || 'Genérica'} {equipment.model ? `/ ${equipment.model}` : ''}</span>
+                        </div>
+                      </td>
+                      <td className="py-6 px-6">
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none">Próxima</span>
+                            <span className="text-[11px] font-black text-slate-700">{nextDate}</span>
+                          </div>
+                          <div className={clsx("px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-wider shadow-lg", calibrationStatus.color)}>
+                            {calibrationStatus.label}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-6 px-6">
+                        <div className={clsx("inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[9px] font-black transition-all duration-300", statusClass)}>
+                          <StatusIcon className="w-3.5 h-3.5" />
                           {statusLabelMap[equipment.status].toUpperCase()}
-                       </div>
-                       <button className="flex items-center gap-2 text-[10px] font-black text-primary hover:gap-3 transition-all hover:text-slate-900 group/btn">
-                         EXPEDIENTE 
-                         <div className="p-1.5 bg-primary/5 rounded-lg group-hover/btn:bg-primary/10">
-                           <ChevronRight className="w-4 h-4" />
-                         </div>
-                       </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
+                        </div>
+                      </td>
+                      <td className="py-6 px-8">
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => handleEdit(equipment)}
+                            className="p-2.5 text-slate-400 hover:text-primary hover:bg-white hover:shadow-xl hover:shadow-primary/10 rounded-xl transition-all active:scale-90"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => { setEquipmentToDelete(equipment); setIsDeleteOpen(true); }}
+                            className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-white hover:shadow-xl hover:shadow-red-100 rounded-xl transition-all active:scale-90"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -425,6 +536,16 @@ export function Equipos() {
               </div>
 
               <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Clasificación</label>
+                <select className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none" value={newEquipment.classification || ""} onChange={(e) => setNewEquipment({ ...newEquipment, classification: e.target.value as any })}>
+                   <option value="">Seleccione clasificación</option>
+                   <option value="Equipo de Referencia">Equipo de Referencia</option>
+                   <option value="Equipo de Trabajo">Equipo de Trabajo</option>
+                   <option value="Equipo Auxiliar">Equipo Auxiliar</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Número de Serie</label>
                 <input placeholder="ej: SN-123456" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none" value={newEquipment.serial_number || ""} onChange={(e) => setNewEquipment({ ...newEquipment, serial_number: e.target.value })} />
               </div>
@@ -500,6 +621,73 @@ export function Equipos() {
               <Button variant="destructive" disabled={isSubmitting} onClick={handleDelete} className="flex-1 h-14 rounded-[1.5rem] font-black bg-red-500 hover:bg-red-600 shadow-xl shadow-red-200 text-white">
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 SÍ, ELIMINAR
+              </Button>
+           </div>
+        </div>
+      </Modal>
+      {/* CSV IMPORT MODAL */}
+      <Modal isOpen={isCsvModalOpen} onClose={() => setIsCsvModalOpen(false)} title="Importación Masiva de Equipos" maxWidthClass="max-w-2xl">
+        <div className="space-y-8 py-4">
+           {/* Step 1: Template */}
+           <div className="flex gap-6 items-start p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-primary flex-shrink-0">
+                 <Download className="w-6 h-6" />
+              </div>
+              <div className="space-y-2">
+                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Paso 1: Descarga la Plantilla</h4>
+                 <p className="text-xs font-bold text-slate-400 leading-relaxed">Descarga el archivo base con el formato correcto para asegurar que tus datos se vinculen sin errores.</p>
+                 <Button onClick={handleDownloadTemplate} variant="link" className="p-0 h-auto text-primary font-black text-[10px] tracking-widest uppercase hover:no-underline flex items-center gap-2">
+                    <Download className="w-3 h-3" />
+                    Bajar Plantilla .CSV
+                 </Button>
+              </div>
+           </div>
+
+           {/* Step 2: Upload */}
+           <div className="flex gap-6 items-start p-6 bg-slate-50 rounded-[2rem] border border-slate-100 relative overflow-hidden">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-primary flex-shrink-0">
+                 <Upload className="w-6 h-6" />
+              </div>
+              <div className="space-y-2 flex-1">
+                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Paso 2: Sube tu Archivo</h4>
+                 <p className="text-xs font-bold text-slate-400 leading-relaxed">Una vez editado el archivo con tus instrumentos, cárgalo aquí para procesar el inventario.</p>
+                 
+                 <div 
+                   onClick={() => csvInputRef.current?.click()}
+                   className={clsx(
+                     "mt-4 w-full h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all",
+                     csvFile ? "bg-green-50 border-green-200" : "bg-white border-slate-200 hover:border-primary/30"
+                   )}
+                 >
+                    {csvFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                         <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-green-600">
+                            <FileSpreadsheet className="w-6 h-6" />
+                         </div>
+                         <span className="text-[10px] font-black text-green-700 uppercase">{csvFile.name}</span>
+                         <span className="text-[9px] font-bold text-green-500">{csvPreview.length} registros detectados</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seleccionar Archivo</span>
+                        <span className="text-[9px] font-bold text-slate-300">Formato compatible: .csv</span>
+                      </div>
+                    )}
+                 </div>
+                 <input ref={csvInputRef} type="file" hidden accept=".csv" onChange={handleCsvFileChange} />
+              </div>
+           </div>
+
+           {/* Footer */}
+           <div className="flex gap-4 pt-4">
+              <Button variant="outline" onClick={() => setIsCsvModalOpen(false)} className="flex-1 h-13 rounded-2xl font-black border-slate-200">CANCELAR</Button>
+              <Button 
+                disabled={!csvFile || isSubmitting} 
+                onClick={handleCsvUpload} 
+                className="flex-1 h-13 rounded-2xl font-black bg-primary text-white shadow-xl shadow-primary/20 gap-3"
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                PROCESAR CARGA MASIVA
               </Button>
            </div>
         </div>

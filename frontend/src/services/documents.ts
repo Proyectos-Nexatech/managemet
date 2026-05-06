@@ -60,6 +60,16 @@ export const documentService = {
     return data as Document;
   },
 
+  async bulkCreateDocuments(docs: Partial<Document>[]) {
+    const { data, error } = await supabase
+      .from('documents')
+      .insert(docs)
+      .select();
+    
+    if (error) throw error;
+    return data as Document[];
+  },
+
   async updateDocument(id: string, updates: Partial<Document>) {
     const { data, error } = await supabase
       .from('documents')

@@ -15,6 +15,7 @@ export interface Equipment {
   calibration_period_days: number;
   last_calibration_date: string | null;
   image_url: string | null;
+  classification: 'Equipo de Referencia' | 'Equipo de Trabajo' | 'Equipo Auxiliar' | null;
   created_at: string;
 }
 
@@ -77,5 +78,15 @@ export const equipmentService = {
       .getPublicUrl(filePath);
 
     return data.publicUrl;
+  },
+
+  async bulkCreate(equipmentList: Partial<Equipment>[]) {
+    const { data, error } = await supabase
+      .from('equipment')
+      .insert(equipmentList)
+      .select();
+    
+    if (error) throw error;
+    return data as Equipment[];
   }
 };

@@ -13,8 +13,12 @@ import {
   Filter,
   BarChart3,
   FileCheck2,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2
 } from 'lucide-react';
+import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Modal } from '../components/ui/Modal';
@@ -56,8 +60,13 @@ export function Documentos() {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'approvals'>('details');
-  const [versions, setVersions] = useState<any[]>([]);
   const [approvals, setApprovals] = useState<any[]>([]);
+  
+  // CSV Import States
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     try {
@@ -131,6 +140,99 @@ export function Documentos() {
     }
   };
 
+  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCsvFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const lines = text.split('\n');
+        const headers = lines[0].split(';').map(h => h.trim());
+        const data = lines.slice(1)
+          .filter(line => line.trim())
+          .map(line => {
+            const values = line.split(';').map(v => v.trim());
+            return headers.reduce((obj: any, header, i) => {
+              obj[header] = values[i];
+              return obj;
+            }, {});
+          });
+        setCsvPreview(data);
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = ['Nombre', 'Codigo', 'Version', 'Tipo', 'Estado'];
+    const rows = [
+      ['Procedimiento de Calibracion', 'PRO-CAL-01', '1.0', 'procedure', 'approved'],
+      ['Manual de Calidad', 'MAN-CAL-01', '1.0', 'quality_manual', 'approved']
+    ];
+    
+    // Add BOM for Excel compatibility in Spanish/Latin America
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [
+      headers.join(';'),
+      ...rows.map(r => r.join(';'))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'plantilla_documentos_managemet.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert('Plantilla descargada. Recuerda usar ";" como separador al editar en Excel.');
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvPreview.length) return;
+    setIsSubmitting(true);
+    try {
+      const typeMapping: any = {
+        'Manual de Calidad': 'quality_manual',
+        'Procedimiento': 'procedure',
+        'Formato': 'format',
+        'Instructivo': 'instruction',
+        'Registro': 'registry'
+      };
+
+      const statusMapping: any = {
+        'Borrador': 'draft',
+        'En Revisión': 'under_review',
+        'Aprobado': 'approved',
+        'Vigente': 'approved',
+        'Obsoleto': 'archived'
+      };
+
+      const formattedDocs = csvPreview.map(item => ({
+        name: item['Nombre'] || item['nombre'],
+        code: item['Codigo'] || item['codigo'],
+        version: item['Version'] || item['version'] || '1.0',
+        type: typeMapping[item['Tipo'] || item['tipo']] || item['Tipo'] || 'procedure',
+        status: statusMapping[item['Estado'] || item['estado']] || item['Estado'] || 'draft',
+        approval_date: (statusMapping[item['Estado'] || item['estado']] === 'approved') ? new Date().toISOString() : null
+      }));
+
+      await documentService.bulkCreateDocuments(formattedDocs);
+      setIsCsvModalOpen(false);
+      setCsvFile(null);
+      setCsvPreview([]);
+      fetchData();
+      alert('Carga masiva completada con éxito.');
+    } catch (error) {
+      console.error('Error in bulk upload:', error);
+      alert('Error en la carga masiva. Verifica los nombres de las columnas.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const filteredDocs = documents.filter(d => 
     d.name.toLowerCase().includes(search.toLowerCase()) || 
     d.code.toLowerCase().includes(search.toLowerCase())
@@ -155,6 +257,14 @@ export function Documentos() {
               className="w-full bg-white border border-slate-200 rounded-[1.25rem] py-3.5 pl-11 pr-4 text-[11px] font-black outline-none focus:ring-4 focus:ring-primary/5 transition-all shadow-sm"
             />
           </div>
+          <Button 
+            onClick={() => setIsCsvModalOpen(true)}
+            variant="outline"
+            className="rounded-[1.25rem] h-13 px-6 font-black flex items-center gap-3 border-slate-200 text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
+          >
+            <Upload className="w-5 h-5" />
+            IMPORTAR CSV
+          </Button>
           <Button 
             onClick={() => setIsModalOpen(true)}
             className="rounded-[1.25rem] h-13 px-8 font-black flex items-center gap-3 shadow-xl shadow-primary/20 bg-primary border-none transition-all hover:scale-[1.03] active:scale-95 text-white"
@@ -542,6 +652,74 @@ export function Documentos() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* CSV IMPORT MODAL */}
+      <Modal isOpen={isCsvModalOpen} onClose={() => setIsCsvModalOpen(false)} title="Importación Masiva de Documentos (DMS)" maxWidthClass="max-w-2xl">
+        <div className="space-y-8 py-4">
+           {/* Step 1: Template */}
+           <div className="flex gap-6 items-start p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-primary flex-shrink-0">
+                 <Download className="w-6 h-6" />
+              </div>
+              <div className="space-y-2">
+                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Paso 1: Descarga la Plantilla</h4>
+                 <p className="text-xs font-bold text-slate-400 leading-relaxed">Descarga el archivo base con el formato correcto para asegurar que tus documentos se vinculen sin errores.</p>
+                 <Button onClick={handleDownloadTemplate} variant="link" className="p-0 h-auto text-primary font-black text-[10px] tracking-widest uppercase hover:no-underline flex items-center gap-2">
+                    <Download className="w-3 h-3" />
+                    Bajar Plantilla .CSV
+                 </Button>
+              </div>
+           </div>
+
+           {/* Step 2: Upload */}
+           <div className="flex gap-6 items-start p-6 bg-slate-50 rounded-[2rem] border border-slate-100 relative overflow-hidden">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-primary flex-shrink-0">
+                 <Upload className="w-6 h-6" />
+              </div>
+              <div className="space-y-2 flex-1">
+                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Paso 2: Sube tu Archivo</h4>
+                 <p className="text-xs font-bold text-slate-400 leading-relaxed">Una vez editado el archivo con tus documentos, cárgalo aquí para procesar el catálogo.</p>
+                 
+                 <div 
+                   onClick={() => csvInputRef.current?.click()}
+                   className={clsx(
+                     "mt-4 w-full h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all",
+                     csvFile ? "bg-green-50 border-green-200" : "bg-white border-slate-200 hover:border-primary/30"
+                   )}
+                 >
+                    {csvFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                         <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-green-600">
+                            <FileSpreadsheet className="w-6 h-6" />
+                         </div>
+                         <span className="text-[10px] font-black text-green-700 uppercase">{csvFile.name}</span>
+                         <span className="text-[9px] font-bold text-green-500">{csvPreview.length} registros detectados</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seleccionar Archivo</span>
+                        <span className="text-[9px] font-bold text-slate-300">Formato compatible: .csv</span>
+                      </div>
+                    )}
+                 </div>
+                 <input ref={csvInputRef} type="file" hidden accept=".csv" onChange={handleCsvFileChange} />
+              </div>
+           </div>
+
+           {/* Footer */}
+           <div className="flex gap-4 pt-4">
+              <Button variant="outline" onClick={() => setIsCsvModalOpen(false)} className="flex-1 h-13 rounded-2xl font-black border-slate-200">CANCELAR</Button>
+              <Button 
+                disabled={!csvFile || isSubmitting} 
+                onClick={handleCsvUpload} 
+                className="flex-1 h-13 rounded-2xl font-black bg-primary text-white shadow-xl shadow-primary/20 gap-3"
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                PROCESAR CARGA MASIVA
+              </Button>
+           </div>
+        </div>
       </Modal>
     </div>
   );
