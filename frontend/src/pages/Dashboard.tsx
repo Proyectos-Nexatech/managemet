@@ -2,40 +2,56 @@ import {
   Activity, 
   TrendingUp,
   ChevronDown,
-  ShieldAlert,
   Thermometer,
   FileCheck,
+  CalendarClock,
 } from 'lucide-react';
+
+import { addDays, differenceInDays } from 'date-fns';
+
 import { Card, CardContent } from '@/components/ui/card';
 import { useState, useEffect } from 'react';
 import { correctiveActionService } from '../services/correctiveActions';
 import { environmentalService } from '../services/environmentalRecords';
 import { resultReportService } from '../services/resultReports';
+import { equipmentService } from '../services/equipment';
 import clsx from 'clsx';
+
 
 export function Dashboard() {
   const [isoStats, setIsoStats] = useState({
     corrective: 0,
     outOfLimits: 0,
     pendingReports: 0,
-    totalEquip: 0
+    totalEquip: 0,
+    pendingCalibrations: 0
   });
+
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [ca, er, rr] = await Promise.all([
+        const [ca, er, rr, eq] = await Promise.all([
           correctiveActionService.getAll(),
           environmentalService.getRecords(50),
-          resultReportService.getAll()
+          resultReportService.getAll(),
+          equipmentService.getAll()
         ]);
+
+        const pendingCalib = eq.filter((e: any) => {
+          if (!e.last_calibration_date) return true; // Pendiente
+          const next = addDays(new Date(e.last_calibration_date), e.calibration_period_days || 365);
+          return differenceInDays(next, new Date()) < 0; // Vencido
+        }).length;
 
         setIsoStats({
           corrective: ca.filter((a: any) => a.status === 'open' || a.status === 'in_progress').length,
           outOfLimits: er.filter((r: any) => !r.within_limits).length,
           pendingReports: rr.filter((r: any) => r.status === 'draft' || r.status === 'review').length,
-          totalEquip: 34760
+          totalEquip: eq.length,
+          pendingCalibrations: pendingCalib
         });
+
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       }
@@ -46,10 +62,11 @@ export function Dashboard() {
 
   const stats = [
     { title: 'Informes Pendientes', value: isoStats.pendingReports, trend: '+2', trendType: 'up', icon: FileCheck, color: 'bg-primary' },
-    { title: 'Equipos Activos', value: '34,760', trend: '+12.4%', trendType: 'up', icon: Activity, color: 'bg-slate-100' },
-    { title: 'Acciones Correctivas', value: isoStats.corrective, trend: 'Pendientes', trendType: isoStats.corrective > 0 ? 'down' : 'up', icon: ShieldAlert, color: 'bg-slate-100' },
-    { title: 'Alertas Ambientales', value: isoStats.outOfLimits, trend: 'Críticos', trendType: isoStats.outOfLimits > 0 ? 'down' : 'up', icon: Thermometer, color: 'bg-slate-100' },
+    { title: 'Equipos Activos', value: isoStats.totalEquip.toLocaleString(), trend: '+12.4%', trendType: 'up', icon: Activity, color: 'bg-slate-100' },
+    { title: 'Calibraciones Pendientes', value: isoStats.pendingCalibrations, trend: 'Críticos', trendType: isoStats.pendingCalibrations > 0 ? 'down' : 'up', icon: CalendarClock, color: 'bg-slate-100' },
+    { title: 'Alertas Ambientales', value: isoStats.outOfLimits, trend: 'Alerta', trendType: isoStats.outOfLimits > 0 ? 'down' : 'up', icon: Thermometer, color: 'bg-slate-100' },
   ];
+
 
   return (
     <div className="h-full flex flex-col space-y-4 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150">
