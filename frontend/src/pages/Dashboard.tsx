@@ -1,252 +1,374 @@
 import { 
   Activity, 
   TrendingUp,
-  ChevronDown,
+  TrendingDown,
   Thermometer,
   FileCheck,
   CalendarClock,
+  AlertTriangle,
+  CheckCircle2,
+  FileX,
+  Wrench,
+  UserX,
+  ClipboardList,
+  ShieldCheck,
+  CalendarDays,
 } from 'lucide-react';
-
-import { addDays, differenceInDays } from 'date-fns';
-
 import { Card, CardContent } from '@/components/ui/card';
 import { useState, useEffect } from 'react';
 import { correctiveActionService } from '../services/correctiveActions';
 import { environmentalService } from '../services/environmentalRecords';
 import { resultReportService } from '../services/resultReports';
 import { equipmentService } from '../services/equipment';
+import { documentService } from '../services/documents';
+import { ncService } from '../services/nonConformities';
+import { scheduleService } from '../services/schedule';
+import { addDays, differenceInDays, format, startOfMonth, endOfMonth } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { supabase } from '../lib/supabase';
 import clsx from 'clsx';
 
+interface KPI {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  trend: 'up' | 'down' | 'neutral';
+  trendLabel: string;
+  icon: React.ElementType;
+  color: 'primary' | 'green' | 'red' | 'orange' | 'blue' | 'slate';
+}
+
+const colorMap = {
+  primary: { card: 'bg-primary', icon: 'bg-white/15 text-white', text: 'text-white/70', value: 'text-white', badge_up: 'bg-green-400/20 text-green-100', badge_down: 'bg-red-400/20 text-red-100', badge_neutral: 'bg-white/10 text-white/60' },
+  green:   { card: 'bg-white', icon: 'bg-green-50 text-green-600', text: 'text-slate-400', value: 'text-green-600', badge_up: 'bg-green-100 text-green-600', badge_down: 'bg-red-100 text-red-600', badge_neutral: 'bg-slate-100 text-slate-500' },
+  red:     { card: 'bg-white', icon: 'bg-red-50 text-red-500', text: 'text-slate-400', value: 'text-red-500', badge_up: 'bg-green-100 text-green-600', badge_down: 'bg-red-100 text-red-600', badge_neutral: 'bg-slate-100 text-slate-500' },
+  orange:  { card: 'bg-white', icon: 'bg-orange-50 text-orange-500', text: 'text-slate-400', value: 'text-orange-500', badge_up: 'bg-green-100 text-green-600', badge_down: 'bg-orange-100 text-orange-600', badge_neutral: 'bg-slate-100 text-slate-500' },
+  blue:    { card: 'bg-white', icon: 'bg-blue-50 text-blue-600', text: 'text-slate-400', value: 'text-blue-600', badge_up: 'bg-green-100 text-green-600', badge_down: 'bg-red-100 text-red-600', badge_neutral: 'bg-slate-100 text-slate-500' },
+  slate:   { card: 'bg-white', icon: 'bg-slate-100 text-slate-600', text: 'text-slate-400', value: 'text-slate-800', badge_up: 'bg-green-100 text-green-600', badge_down: 'bg-red-100 text-red-600', badge_neutral: 'bg-slate-100 text-slate-500' },
+};
+
+function KPICard({ kpi }: { kpi: KPI }) {
+  const c = colorMap[kpi.color];
+  const badgeClass = kpi.trend === 'up' ? c.badge_up : kpi.trend === 'down' ? c.badge_down : c.badge_neutral;
+  const TrendIcon = kpi.trend === 'up' ? TrendingUp : kpi.trend === 'down' ? TrendingDown : CheckCircle2;
+  
+  return (
+    <Card className={clsx(
+      "border-none shadow-[0_8px_30px_rgb(0,0,0,0.03)] rounded-[2rem] overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-xl group",
+      c.card
+    )}>
+      <CardContent className="p-5 flex flex-col gap-4 relative overflow-hidden">
+        <div className="flex justify-between items-start">
+          <div className={clsx("w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:rotate-6 group-hover:scale-110", c.icon)}>
+            <kpi.icon className="w-6 h-6" />
+          </div>
+          <div className={clsx("flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black tracking-tight", badgeClass)}>
+            <TrendIcon className="w-3 h-3" />
+            {kpi.trendLabel}
+          </div>
+        </div>
+        <div>
+          <p className={clsx("text-[10px] font-black mb-1 uppercase tracking-widest", c.text)}>{kpi.title}</p>
+          <p className={clsx("text-3xl font-black tracking-tighter leading-none transition-transform group-hover:translate-x-1 duration-300", c.value)}>
+            {kpi.value}
+          </p>
+          <p className={clsx("text-[10px] font-bold mt-2", c.text)}>{kpi.subtitle}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface NextCalibration {
+  name: string;
+  internalId: string;
+  daysLeft: number;
+  date: string;
+}
 
 export function Dashboard() {
-  const [isoStats, setIsoStats] = useState({
-    corrective: 0,
-    outOfLimits: 0,
-    pendingReports: 0,
-    totalEquip: 0,
-    pendingCalibrations: 0
-  });
-
+  const [kpis, setKpis] = useState<KPI[]>([]);
+  const [nextCalibrations, setNextCalibrations] = useState<NextCalibration[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchAll = async () => {
       try {
-        const [ca, er, rr, eq] = await Promise.all([
+        const now = new Date();
+        const monthStart = startOfMonth(now);
+        const monthEnd = endOfMonth(now);
+
+
+        const [eq, docs, nc, _ca, er, rr, sched, allAuths] = await Promise.all([
+
+          equipmentService.getAll(),
+          documentService.getDocuments(),
+          ncService.getAll(),
           correctiveActionService.getAll(),
           environmentalService.getRecords(50),
           resultReportService.getAll(),
-          equipmentService.getAll()
+          scheduleService.getSchedule(),
+          supabase.from('personnel_authorizations').select('expiry_date, is_active').then(r => r.data || [])
         ]);
 
-        const pendingCalib = eq.filter((e: any) => {
-          if (!e.last_calibration_date) return true; // Pendiente
+        // --- Equipment KPIs ---
+        const activeEquip = eq.filter((e: any) => e.status !== 'out_of_service');
+        const expiredCalib = activeEquip.filter((e: any) => {
+          if (!e.last_calibration_date) return true;
           const next = addDays(new Date(e.last_calibration_date), e.calibration_period_days || 365);
-          return differenceInDays(next, new Date()) < 0; // Vencido
+          return differenceInDays(next, now) < 0;
+        });
+        const soonExpiring = activeEquip.filter((e: any) => {
+          if (!e.last_calibration_date) return false;
+          const next = addDays(new Date(e.last_calibration_date), e.calibration_period_days || 365);
+          const d = differenceInDays(next, now);
+          return d >= 0 && d <= 30;
+        });
+        const inService = activeEquip.filter((e: any) => e.status === 'active');
+        const inMaintenance = eq.filter((e: any) => e.status === 'maintenance').length;
+        const complianceRate = activeEquip.length > 0
+          ? Math.round(((activeEquip.length - expiredCalib.length) / activeEquip.length) * 100)
+          : 0;
+
+        // Next upcoming calibrations (within 60 days, sorted by soonest)
+        const upcoming: NextCalibration[] = activeEquip
+          .filter((e: any) => e.last_calibration_date && (e.calibration_period_days || 0) > 0)
+          .map((e: any) => {
+            const next = addDays(new Date(e.last_calibration_date), e.calibration_period_days);
+            const daysLeft = differenceInDays(next, now);
+            return { name: e.name, internalId: e.internal_id, daysLeft, date: format(next, "dd MMM", { locale: es }) };
+          })
+          .filter((e: any) => e.daysLeft >= 0 && e.daysLeft <= 60)
+          .sort((a: any, b: any) => a.daysLeft - b.daysLeft)
+          .slice(0, 6);
+        setNextCalibrations(upcoming);
+
+        // --- Program Efficiency ---
+        const scheduledThisMonth = sched.filter((s: any) => {
+          const d = new Date(s.scheduled_date);
+          return d >= monthStart && d <= monthEnd;
+        });
+        const completedThisMonth = scheduledThisMonth.filter((s: any) => s.status === 'completed').length;
+        const efficiency = scheduledThisMonth.length > 0
+          ? Math.round((completedThisMonth / scheduledThisMonth.length) * 100)
+          : 0;
+
+        // --- Documents ---
+        const docsExpiring = docs.filter((d: any) => {
+          if (!d.expiry_date) return false;
+          const diff = differenceInDays(new Date(d.expiry_date), now);
+          return diff >= 0 && diff <= 60;
         }).length;
 
-        setIsoStats({
-          corrective: ca.filter((a: any) => a.status === 'open' || a.status === 'in_progress').length,
-          outOfLimits: er.filter((r: any) => !r.within_limits).length,
-          pendingReports: rr.filter((r: any) => r.status === 'draft' || r.status === 'review').length,
-          totalEquip: eq.length,
-          pendingCalibrations: pendingCalib
-        });
+        // --- Non-conformities ---
+        const openNC = nc.filter((n: any) => n.status === 'open' || n.status === 'analysis' || n.status === 'in_progress').length;
 
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        // --- Personnel ---
+        const expiredAuths = (allAuths as any[]).filter((a: any) => {
+          if (!a.is_active || !a.expiry_date) return false;
+          return differenceInDays(new Date(a.expiry_date), now) < 0;
+        }).length;
+
+        // --- ISO compliance (audits) ---
+        const pendingReports = rr.filter((r: any) => r.status === 'draft' || r.status === 'review').length;
+        const envAlerts = er.filter((r: any) => !r.within_limits).length;
+
+        setKpis([
+          {
+            title: 'Cumplimiento Metrológico',
+            value: `${complianceRate}%`,
+            subtitle: `${inService.length} equipos con calibración vigente`,
+            trend: complianceRate >= 90 ? 'up' : complianceRate >= 70 ? 'neutral' : 'down',
+            trendLabel: complianceRate >= 90 ? 'Óptimo' : complianceRate >= 70 ? 'Aceptable' : 'Crítico',
+            icon: ShieldCheck,
+            color: 'primary',
+          },
+          {
+            title: 'Calibraciones Pendientes',
+            value: expiredCalib.length,
+            subtitle: 'Vencidas o sin fecha registrada',
+            trend: expiredCalib.length === 0 ? 'up' : 'down',
+            trendLabel: expiredCalib.length === 0 ? 'Al día' : 'Requieren atención',
+            icon: CalendarClock,
+            color: expiredCalib.length === 0 ? 'green' : 'red',
+          },
+          {
+            title: 'Próximos a Vencer',
+            value: soonExpiring.length,
+            subtitle: 'Equipos vencen en ≤30 días',
+            trend: soonExpiring.length === 0 ? 'up' : soonExpiring.length <= 3 ? 'neutral' : 'down',
+            trendLabel: soonExpiring.length === 0 ? 'Sin alertas' : 'Próxima atención',
+            icon: AlertTriangle,
+            color: soonExpiring.length === 0 ? 'slate' : 'orange',
+          },
+          {
+            title: 'Equipos Activos',
+            value: activeEquip.length.toLocaleString(),
+            subtitle: `${inMaintenance} en mantenimiento`,
+            trend: 'neutral',
+            trendLabel: 'Total registrados',
+            icon: Activity,
+            color: 'blue',
+          },
+          {
+            title: 'Eficiencia del Programa',
+            value: `${efficiency}%`,
+            subtitle: `${completedThisMonth}/${scheduledThisMonth.length} en el mes actual`,
+            trend: efficiency >= 80 ? 'up' : efficiency >= 50 ? 'neutral' : 'down',
+            trendLabel: efficiency >= 80 ? 'En objetivo' : 'Por mejorar',
+            icon: ClipboardList,
+            color: efficiency >= 80 ? 'green' : 'orange',
+          },
+          {
+            title: 'No Conformidades Abiertas',
+            value: openNC,
+            subtitle: 'En análisis o en progreso',
+            trend: openNC === 0 ? 'up' : openNC <= 3 ? 'neutral' : 'down',
+            trendLabel: openNC === 0 ? 'Sin NC abiertas' : 'Requieren seguimiento',
+            icon: FileX,
+            color: openNC === 0 ? 'slate' : 'red',
+          },
+          {
+            title: 'Equipos en Mantenimiento',
+            value: inMaintenance,
+            subtitle: 'Fuera de servicio actualmente',
+            trend: inMaintenance === 0 ? 'up' : 'neutral',
+            trendLabel: inMaintenance === 0 ? 'Todos operativos' : 'En proceso',
+            icon: Wrench,
+            color: inMaintenance === 0 ? 'slate' : 'orange',
+          },
+          {
+            title: 'Docs. por Vencer',
+            value: docsExpiring,
+            subtitle: 'Documentos vencen en ≤60 días',
+            trend: docsExpiring === 0 ? 'up' : 'down',
+            trendLabel: docsExpiring === 0 ? 'Sin vencimientos' : 'Revisar urgente',
+            icon: FileCheck,
+            color: docsExpiring === 0 ? 'slate' : 'orange',
+          },
+          {
+            title: 'Competencias Vencidas',
+            value: expiredAuths,
+            subtitle: 'Autorizaciones de personal expiradas',
+            trend: expiredAuths === 0 ? 'up' : 'down',
+            trendLabel: expiredAuths === 0 ? 'Personal al día' : 'Renovar autorización',
+            icon: UserX,
+            color: expiredAuths === 0 ? 'slate' : 'red',
+          },
+          {
+            title: 'Alertas Ambientales',
+            value: envAlerts,
+            subtitle: 'Registros fuera de límites',
+            trend: envAlerts === 0 ? 'up' : 'down',
+            trendLabel: envAlerts === 0 ? 'Condiciones OK' : 'Fuera de rango',
+            icon: Thermometer,
+            color: envAlerts === 0 ? 'slate' : 'red',
+          },
+          {
+            title: 'Informes Pendientes',
+            value: pendingReports,
+            subtitle: 'En borrador o revisión',
+            trend: pendingReports === 0 ? 'up' : 'neutral',
+            trendLabel: pendingReports === 0 ? 'Al día' : 'Pendientes de firma',
+            icon: FileCheck,
+            color: pendingReports === 0 ? 'slate' : 'blue',
+          },
+          {
+            title: 'ISO Tasa Cumplimiento',
+            value: `${Math.max(0, 100 - openNC * 5 - expiredAuths * 3)}%`,
+            subtitle: 'Estimado basado en NC y personal',
+            trend: openNC === 0 && expiredAuths === 0 ? 'up' : 'neutral',
+            trendLabel: 'Cláusula 6.2 / 8.7',
+            icon: ShieldCheck,
+            color: openNC === 0 && expiredAuths === 0 ? 'green' : 'orange',
+          },
+        ]);
+      } catch (err) {
+        console.error('Dashboard error:', err);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchDashboardData();
+    fetchAll();
   }, []);
 
-  const stats = [
-    { title: 'Informes Pendientes', value: isoStats.pendingReports, trend: '+2', trendType: 'up', icon: FileCheck, color: 'bg-primary' },
-    { title: 'Equipos Activos', value: isoStats.totalEquip.toLocaleString(), trend: '+12.4%', trendType: 'up', icon: Activity, color: 'bg-slate-100' },
-    { title: 'Calibraciones Pendientes', value: isoStats.pendingCalibrations, trend: 'Críticos', trendType: isoStats.pendingCalibrations > 0 ? 'down' : 'up', icon: CalendarClock, color: 'bg-slate-100' },
-    { title: 'Alertas Ambientales', value: isoStats.outOfLimits, trend: 'Alerta', trendType: isoStats.outOfLimits > 0 ? 'down' : 'up', icon: Thermometer, color: 'bg-slate-100' },
-  ];
-
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cargando indicadores...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-full flex flex-col space-y-4 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150">
-      {/* Top Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
-        {stats.map((stat, i) => (
-          <Card key={i} className={clsx(
-            "border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2.5rem] overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_20px_60px_rgb(0,0,0,0.05)]",
-            stat.color === 'bg-primary' ? 'bg-primary text-white' : 'bg-white text-slate-800'
-          )}>
-            <CardContent className="p-4 lg:p-6 flex flex-col gap-4 relative overflow-hidden group">
-              <div className="flex justify-between items-start">
-                 <div className={clsx(
-                   "w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-500 group-hover:rotate-6 group-hover:scale-110",
-                   stat.color === 'bg-primary' ? 'bg-white text-primary border-white/20' : 'bg-slate-50 text-slate-800 border-slate-100'
-                 )}>
-                   <stat.icon className="w-6 h-6" />
-                 </div>
-                 <div className={clsx(
-                   "flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black tracking-tight",
-                   stat.trendType === 'up' 
-                     ? (stat.color === 'bg-primary' ? 'bg-green-400 text-white' : 'bg-green-100 text-green-600') 
-                     : (stat.color === 'bg-primary' ? 'bg-red-400 text-white' : 'bg-red-100 text-red-600')
-                 )}>
-                    {stat.trendType === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
-                    {stat.trend}
-                 </div>
-              </div>
-              
-              <div>
-                <p className={clsx("text-xs font-bold mb-2 uppercase tracking-widest", stat.color === 'bg-primary' ? 'text-white/60' : 'text-slate-400')}>
-                  {stat.title}
-                </p>
-                <p className="text-3xl font-black tracking-tighter transition-transform group-hover:translate-x-1 duration-300">
-                  {stat.value}
-                </p>
-                {stat.color === 'bg-primary' && (
-                  <p className="text-[10px] font-bold text-white/50 mt-2">vs el mes pasado</p>
-                )}
-                {stat.color !== 'bg-primary' && (
-                   <p className="text-[10px] font-bold text-slate-300 mt-2">vs el mes pasado</p>
-                )}
-              </div>
-              
-              {/* Decorative circle on primary card */}
-              {stat.color === 'bg-primary' && (
-                <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-              )}
-            </CardContent>
-          </Card>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-black tracking-tight text-slate-800">Dashboard Metrológico</h1>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+          {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
+        </p>
+      </div>
+
+      {/* KPI Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {kpis.map((kpi, i) => (
+          <KPICard key={i} kpi={kpi} />
         ))}
       </div>
 
-      {/* Main Content Area Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 pb-4">
-        {/* Left: Huge Chart Card */}
-        <Card className="lg:col-span-2 border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 lg:p-8 group overflow-hidden relative flex flex-col">
-          <div className="flex items-center justify-between mb-6 flex-shrink-0">
-             <div className="space-y-1">
-               <h3 className="text-xl font-black tracking-tight text-slate-800">Tendencia de Calibración</h3>
-               <p className="text-xs font-bold text-slate-400">Track your laboratory efficiency</p>
-             </div>
-             
-             <div className="flex items-center gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 group/legend cursor-pointer">
-                    <div className="w-2.5 h-2.5 rounded-full bg-slate-200 group-hover:scale-125 transition-transform" />
-                    <span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-800 transition-colors">Vencidas</span>
-                  </div>
-                  <div className="flex items-center gap-2 group/legend cursor-pointer">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary group-hover:scale-125 transition-transform shadow-lg shadow-primary/20" />
-                    <span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-800 transition-colors">Completadas</span>
-                  </div>
-                </div>
-                
-                <button className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-[11px] font-black text-slate-700 hover:bg-slate-100 transition-colors">
-                  This year <ChevronDown className="w-4 h-4 text-slate-400" />
-                </button>
-             </div>
-          </div>
-
-          <div className="flex-1 w-full overflow-x-auto lg:overflow-x-visible custom-scrollbar relative min-h-0">
-            <div className="flex items-end justify-between px-2 pb-6 min-w-[700px] lg:min-w-0 h-full relative">
-             {/* Mocking bar chart as seen in image */}
-             {[45, 78, 56, 92, 45, 68, 88, 55, 60, 42, 75, 50].map((h, i) => (
-                <div key={i} className="flex flex-col items-center gap-2 group/bar w-full max-w-[24px]">
-                   <div className="w-full flex flex-col justify-end h-full gap-1 rounded-full bg-transparent overflow-hidden">
-                      <div 
-                        className="w-full bg-slate-100 rounded-full transition-all duration-1000 group-hover/bar:bg-slate-200" 
-                        style={{ height: `${h * 0.8}%` }} 
-                      />
-                      <div 
-                        className="w-full bg-primary rounded-full transition-all duration-1000 group-hover/bar:scale-x-110 shadow-lg shadow-primary/10" 
-                        style={{ height: `${h}%` }} 
-                      />
-                   </div>
-                   <span className="text-[10px] font-black text-slate-300 group-hover/bar:text-slate-800 transition-colors">
-                     {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i]}
-                   </span>
-                </div>
-             ))}
-             
-             {/* Tooltip mockup */}
-             <div className="absolute left-[33%] top-0 group-hover:scale-110 transition-transform duration-500">
-                <div className="bg-slate-900 shadow-2xl rounded-3xl p-5 relative after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-8 after:border-transparent after:border-t-slate-900 border border-white/5 pointer-events-none">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                       <div className="w-2.5 h-2.5 rounded-full bg-primary ring-4 ring-primary/20 animate-pulse" />
-                       <span className="text-white text-xs font-black tracking-tight">43.787 Calib.</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                       <div className="w-2.5 h-2.5 rounded-full bg-slate-600 ring-4 ring-slate-600/20" />
-                       <span className="text-white text-xs font-black tracking-tight">39.784 Equip.</span>
-                    </div>
-                  </div>
-                </div>
-             </div>
-          </div>
-        </div>
-      </Card>
-
-        {/* Right Area: Stats stack */}
-        <div className="space-y-4 flex flex-col h-full">
-           {/* Half Donut Card */}
-           <Card className="flex-1 border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 lg:p-8 group overflow-hidden relative flex flex-col">
-              <div className="flex flex-col justify-between h-full">
-                <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                  <div className="space-y-1">
-                    <h3 className="text-xl font-black tracking-tight text-slate-800">Estadísticas por Magnitud</h3>
-                    <p className="text-xs font-bold text-slate-400">Distribución de activos por tipo</p>
-                  </div>
-                  <button className="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-slate-400 hover:text-primary hover:bg-white transition-all">
-                    <ChevronDown className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="relative flex-1 w-full mb-6 flex items-center justify-center min-h-[220px]">
-                   {/* Background rings for better depth */}
-                   <div className="absolute w-52 h-52 rounded-full border-[10px] border-slate-50" />
-                   <div className="absolute w-52 h-52 rounded-full border-[10px] border-primary border-t-transparent border-r-transparent group-hover:rotate-[30deg] transition-transform duration-1000 shadow-lg shadow-primary/5" />
-                   
-                   <div className="absolute w-40 h-40 rounded-full border-[10px] border-slate-50" />
-                   <div className="absolute w-40 h-40 rounded-full border-[10px] border-emerald-400 border-l-transparent border-t-transparent group-hover:-rotate-[45deg] transition-transform duration-1000 shadow-lg shadow-emerald-400/5" />
-
-                   <div className="absolute w-28 h-28 rounded-full border-[10px] border-slate-50" />
-                   <div className="absolute w-28 h-28 rounded-full border-[10px] border-red-400 border-b-transparent border-l-transparent group-hover:rotate-[60deg] transition-transform duration-1000 shadow-lg shadow-red-400/5" />
-                   
-                   <div className="text-center z-10 bg-white/80 backdrop-blur-sm rounded-full p-4">
-                     <p className="text-3xl font-black tracking-tighter text-slate-800 leading-none">9.829</p>
-                     <p className="text-[10px] font-black tracking-[0.15em] text-slate-400 uppercase mt-1">Total Equipos</p>
-                     <div className="inline-flex items-center gap-1 bg-green-50 text-green-500 text-[9px] font-black px-2 py-0.5 rounded-full mt-2">
-                       +5.34%
-                     </div>
-                   </div>
-                </div>
-
-                <div className="space-y-2 pt-4 border-t border-slate-50 flex-shrink-0">
-                   {[
-                     { name: 'Temperatura', count: '2.487', trend: '+1.8%', type: 'up' },
-                     { name: 'Presión', count: '1.828', trend: '+2.3%', type: 'up' },
-                     { name: 'Masa', count: '1.463', trend: '-1.04%', type: 'down' },
-                   ].map((item, i) => (
-                     <div key={i} className="flex items-center justify-between group/list cursor-pointer py-1">
-                        <div className="flex items-center gap-3">
-                           <div className={clsx("w-2 h-2 rounded-full", i === 0 ? "bg-primary" : i === 1 ? "bg-emerald-400" : "bg-red-400")} />
-                           <span className="text-xs font-bold text-slate-600 group-hover/list:text-slate-900 transition-colors uppercase tracking-tight">{item.name}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-black text-slate-800">{item.count}</span>
-                          <span className={clsx("text-[9px] font-black px-2 py-0.5 rounded-full", item.type === 'up' ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500')}>
-                            {item.trend}
-                          </span>
-                        </div>
-                     </div>
-                   ))}
-                </div>
+      {/* Bottom: Next Calibrations Timeline */}
+      <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 lg:p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="space-y-1">
+            <h3 className="text-lg font-black tracking-tight text-slate-800 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                <CalendarDays className="w-4 h-4 text-primary" />
               </div>
-           </Card>
+              Próximas Calibraciones
+            </h3>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Equipos que vencen en los próximos 60 días</p>
+          </div>
         </div>
-      </div>
+
+        {nextCalibrations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-2">
+            <CheckCircle2 className="w-10 h-10 text-green-200" />
+            <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No hay calibraciones próximas a vencer</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {nextCalibrations.map((cal, i) => {
+              const urgency = cal.daysLeft <= 7 ? 'red' : cal.daysLeft <= 15 ? 'orange' : 'green';
+              return (
+                <div key={i} className={clsx(
+                  "flex items-center gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.01]",
+                  urgency === 'red' ? 'bg-red-50 border-red-100' : urgency === 'orange' ? 'bg-orange-50 border-orange-100' : 'bg-green-50 border-green-100'
+                )}>
+                  <div className={clsx(
+                    "w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm",
+                    urgency === 'red' ? 'bg-red-500 text-white' : urgency === 'orange' ? 'bg-orange-400 text-white' : 'bg-green-500 text-white'
+                  )}>
+                    <span className="text-lg font-black leading-none">{cal.daysLeft}</span>
+                    <span className="text-[8px] font-black uppercase tracking-wide leading-none mt-0.5">días</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black text-slate-800 truncate">{cal.name}</p>
+                    <p className={clsx("text-[10px] font-black uppercase tracking-widest",
+                      urgency === 'red' ? 'text-red-500' : urgency === 'orange' ? 'text-orange-500' : 'text-green-600'
+                    )}>{cal.internalId}</p>
+                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">Vence: {cal.date}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
