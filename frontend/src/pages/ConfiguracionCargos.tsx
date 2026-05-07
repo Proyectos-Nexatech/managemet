@@ -699,14 +699,22 @@ export function ConfiguracionCargos() {
                               Actividad Autorizada
                             </span>
                             {auth.is_active ? (
-                              <span className="px-2 py-0.5 rounded-md bg-green-50 text-green-500 text-[9px] font-bold uppercase tracking-wider">Vigente</span>
+                              new Date(auth.expiry_date || '2099-12-31') < new Date() ? (
+                                <span className="px-2 py-0.5 rounded-md bg-red-50 text-red-500 text-[9px] font-bold uppercase tracking-wider">Vencida</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md bg-green-50 text-green-500 text-[9px] font-bold uppercase tracking-wider">Vigente</span>
+                              )
                             ) : (
-                              <span className="px-2 py-0.5 rounded-md bg-red-50 text-red-500 text-[9px] font-bold uppercase tracking-wider">Revocada</span>
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-wider">Revocada</span>
                             )}
                           </div>
                           <p className="text-sm font-bold text-slate-700">{auth.authorized_activity}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Autorizado por: {auth.authorized_by} · {auth.authorization_date}</p>
-                          {auth.scope && <p className="text-xs text-slate-500 mt-1 italic">Alcance: {auth.scope}</p>}
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                            <p className="text-[10px] text-slate-400 font-bold">Autorizado por: <span className="text-slate-600 uppercase">{auth.authorized_by}</span></p>
+                            <p className="text-[10px] text-slate-400 font-bold">Desde: <span className="text-slate-600">{auth.authorization_date}</span></p>
+                            {auth.expiry_date && <p className="text-[10px] text-slate-400 font-bold">Vence: <span className={clsx(new Date(auth.expiry_date) < new Date() ? "text-red-500" : "text-slate-600")}>{auth.expiry_date}</span></p>}
+                          </div>
+                          {auth.scope && <p className="text-xs text-slate-500 mt-2 italic bg-slate-50 p-2 rounded-xl">Alcance: {auth.scope}</p>}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -744,15 +752,48 @@ export function ConfiguracionCargos() {
                     <h2 className="text-xl font-black text-slate-800">Registros de Supervisión</h2>
                     <p className="text-sm font-bold text-slate-400">Personal: <span className="text-primary font-black">{selectedPerson.name}</span></p>
                   </div>
-                  <PermissionGuard module="config_cargos" action="create">
-                    <Button 
-                      onClick={() => setIsSupervisionModalOpen(true)}
-                      className="rounded-[1rem] h-10 px-4 font-black bg-slate-900 text-white hover:bg-black transition-all"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      REGISTRAR SUPERVISIÓN
-                    </Button>
-                  </PermissionGuard>
+                  <div className="flex gap-3">
+                    <PermissionGuard module="config_cargos" action="create">
+                      <Button 
+                        onClick={() => setIsSupervisionModalOpen(true)}
+                        className="rounded-[1rem] h-10 px-4 font-black bg-slate-900 text-white hover:bg-black transition-all"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        REGISTRAR SUPERVISIÓN
+                      </Button>
+                    </PermissionGuard>
+                  </div>
+                </div>
+
+                {/* Supervision Summary Strip */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card className="border-none shadow-sm rounded-2xl bg-white p-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Supervisiones</p>
+                    <p className="text-2xl font-black text-slate-800">{supervisions.length}</p>
+                  </Card>
+                  <Card className="border-none shadow-sm rounded-2xl bg-white p-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Última Fecha</p>
+                    <p className="text-xl font-black text-slate-800">
+                      {supervisions.length > 0 ? supervisions[0].supervision_date : 'N/A'}
+                    </p>
+                  </Card>
+                  <Card className="border-none shadow-sm rounded-2xl bg-white p-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Resultado Promedio</p>
+                    <p className={clsx(
+                      "text-xl font-black",
+                      supervisions.filter(s => s.result === 'satisfactory').length / supervisions.length > 0.8 ? "text-green-600" : "text-orange-600"
+                    )}>
+                      {supervisions.length > 0 
+                        ? `${Math.round((supervisions.filter(s => s.result === 'satisfactory').length / supervisions.length) * 100)}% Sat.`
+                        : 'N/A'}
+                    </p>
+                  </Card>
+                  <Card className="border-none shadow-sm rounded-2xl bg-white p-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Siguiente Prog.</p>
+                    <p className="text-xl font-black text-blue-600">
+                      {supervisions.find(s => s.next_supervision_date)?.next_supervision_date || 'No prog.'}
+                    </p>
+                  </Card>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
@@ -781,11 +822,25 @@ export function ConfiguracionCargos() {
                             </span>
                           </div>
                           <p className="text-sm font-bold text-slate-700">{sup.activity_supervised}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Supervisor: {sup.supervisor_name}</p>
-                          {sup.observations && <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded-lg italic font-medium">"{sup.observations}"</p>}
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                            <p className="text-[10px] text-slate-400 font-bold">Supervisor: <span className="text-slate-600 uppercase">{sup.supervisor_name}</span></p>
+                            {sup.next_supervision_date && <p className="text-[10px] text-blue-500 font-black tracking-tight">Prox. Prog: {sup.next_supervision_date}</p>}
+                          </div>
+                          {sup.observations && <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded-lg italic font-medium border-l-2 border-slate-200">"{sup.observations}"</p>}
+                          {sup.corrective_action && (
+                            <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-100">
+                              <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mb-1">Plan de Mejora / Acción Correctiva:</p>
+                              <p className="text-xs font-bold text-red-700">{sup.corrective_action}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {sup.document_url && (
+                          <a href={sup.document_url} target="_blank" rel="noreferrer" className="p-2 text-slate-400 hover:text-primary transition-colors">
+                            <FileText className="w-4 h-4" />
+                          </a>
+                        )}
                         <PermissionGuard module="config_cargos" action="delete">
                           <button onClick={() => handleDeleteSupervision(sup.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
                             <Trash2 className="w-4 h-4" />
@@ -932,6 +987,24 @@ export function ConfiguracionCargos() {
               <input type="date" required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newAuth.authorization_date || ''} onChange={(e) => setNewAuth({...newAuth, authorization_date: e.target.value})} />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Fecha de Vencimiento (Opcional)</label>
+              <input type="date" className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newAuth.expiry_date || ''} onChange={(e) => setNewAuth({...newAuth, expiry_date: e.target.value})} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Sustento (PDF)</label>
+              <input type="file" accept=".pdf" className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-primary/10 file:text-primary hover:file:bg-primary/20" 
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file && selectedPerson) {
+                    const url = await personnelComplianceService.uploadComplianceDocument(selectedPerson.id, file, 'auth');
+                    setNewAuth({...newAuth, document_url: url});
+                  }
+                }}
+              />
+            </div>
+          </div>
           <div className="pt-4 flex gap-3">
             <Button type="button" variant="outline" onClick={() => setIsAuthModalOpen(false)} className="flex-1 rounded-2xl font-black">CANCELAR</Button>
             <Button type="submit" disabled={isSubmitting} className="flex-1 rounded-2xl font-black bg-primary text-white">
@@ -965,8 +1038,26 @@ export function ConfiguracionCargos() {
               <input required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newSupervision.supervisor_name || ''} onChange={(e) => setNewSupervision({...newSupervision, supervisor_name: e.target.value})} placeholder="Nombre del Supervisor" />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Fecha</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Fecha de Supervisión</label>
               <input type="date" required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newSupervision.supervision_date || ''} onChange={(e) => setNewSupervision({...newSupervision, supervision_date: e.target.value})} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Próxima Supervisión (Opcional)</label>
+              <input type="date" className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newSupervision.next_supervision_date || ''} onChange={(e) => setNewSupervision({...newSupervision, next_supervision_date: e.target.value})} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Evidencia (Opcional)</label>
+              <input type="file" accept=".pdf" className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200" 
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file && selectedPerson) {
+                    const url = await personnelComplianceService.uploadComplianceDocument(selectedPerson.id, file, 'supervision');
+                    setNewSupervision({...newSupervision, document_url: url});
+                  }
+                }}
+              />
             </div>
           </div>
           <div className="space-y-1">
@@ -995,6 +1086,12 @@ export function ConfiguracionCargos() {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Observaciones</label>
             <textarea className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 h-24 resize-none" value={newSupervision.observations || ''} onChange={(e) => setNewSupervision({...newSupervision, observations: e.target.value})} placeholder="Detalles de lo observado..." />
           </div>
+          {newSupervision.result !== 'satisfactory' && (
+            <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
+              <label className="text-[10px] font-black text-red-500 uppercase tracking-widest pl-1">Plan de Mejora / Acción Correctiva</label>
+              <textarea required className="w-full bg-red-50/50 border border-red-100 rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-red-200 h-20 resize-none" value={newSupervision.corrective_action || ''} onChange={(e) => setNewSupervision({...newSupervision, corrective_action: e.target.value})} placeholder="Defina las acciones para cerrar la brecha de competencia..." />
+            </div>
+          )}
           <div className="pt-4 flex gap-3">
             <Button type="button" variant="outline" onClick={() => setIsSupervisionModalOpen(false)} className="flex-1 rounded-2xl font-black">CANCELAR</Button>
             <Button type="submit" disabled={isSubmitting} className="flex-1 rounded-2xl font-black bg-slate-900 text-white">
