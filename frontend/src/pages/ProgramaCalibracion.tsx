@@ -153,39 +153,6 @@ export function ProgramaCalibracion() {
     }
   };
 
-  // View data calculation
-  const viewDays = useMemo(() => {
-    if (viewMode === 'month' || viewMode === 'list') {
-      const start = startOfMonth(currentDate);
-      const end = endOfMonth(currentDate);
-      return eachDayOfInterval({ start, end });
-    } else if (viewMode === 'week') {
-      const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-      const end = endOfWeek(currentDate, { weekStartsOn: 1 });
-      return eachDayOfInterval({ start, end });
-    } else {
-      return [currentDate];
-    }
-  }, [currentDate, viewMode]);
-
-  const allEvents = useMemo(() => {
-    const events: any[] = [];
-    viewDays.forEach(day => {
-      const dayEvents = getEventsForDay(day);
-      events.push(...dayEvents);
-    });
-    
-    if (searchTerm) {
-      return events.filter(e => 
-        e.equipment?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.equipment?.internal_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.work_order_no?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    return events;
-  }, [viewDays, equipmentList, schedule, searchTerm]);
-
-
   const getEventsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -227,6 +194,40 @@ export function ProgramaCalibracion() {
 
     return events;
   };
+
+  // View data calculation
+  const viewDays = useMemo(() => {
+    if (viewMode === 'month' || viewMode === 'list') {
+      const start = startOfMonth(currentDate);
+      const end = endOfMonth(currentDate);
+      return eachDayOfInterval({ start, end });
+    } else if (viewMode === 'week') {
+      const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+      const end = endOfWeek(currentDate, { weekStartsOn: 1 });
+      return eachDayOfInterval({ start, end });
+    } else {
+      return [currentDate];
+    }
+  }, [currentDate, viewMode]);
+
+  const allEvents = useMemo(() => {
+    const events: any[] = [];
+    viewDays.forEach(day => {
+      const dayEvents = getEventsForDay(day);
+      events.push(...dayEvents);
+    });
+    
+    if (searchTerm) {
+      return events.filter(e => 
+        e.equipment?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.equipment?.internal_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.work_order_no?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    return events;
+  }, [viewDays, equipmentList, schedule, searchTerm]);
+
+
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
