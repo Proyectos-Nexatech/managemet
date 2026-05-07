@@ -39,14 +39,8 @@ export function DashboardLayout() {
             >
               <Menu className="w-6 h-6" />
             </button>
-
-            <div className="flex flex-col">
-              <h2 className="text-xl lg:text-2xl font-black tracking-tight text-slate-800 line-clamp-1">Dashboard Metrológico</h2>
-              <p className="text-[10px] lg:text-xs font-bold text-slate-400 capitalize hidden sm:block">
-                {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
-            </div>
           </div>
+
           
           <div className="flex items-center gap-3 lg:gap-6 bg-white p-2 lg:p-2.5 rounded-2xl lg:rounded-[2rem] border border-slate-200 shadow-sm shadow-slate-100/50 hover:shadow-md transition-shadow duration-300">
              <div className="flex items-center gap-2 lg:gap-3 px-1 lg:px-2 group cursor-pointer">
