@@ -25,8 +25,6 @@ import { environmentalService, type EnvironmentalRecord, type EnvironmentalLimit
 import clsx from 'clsx';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  LineChart, 
-  Line, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -40,7 +38,8 @@ import {
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+// import { es } from 'date-fns/locale';
+
 import html2canvas from 'html2canvas';
 
 export function CondicionesAmbientales() {
@@ -206,20 +205,13 @@ export function CondicionesAmbientales() {
     doc.text('ANÁLISIS GRÁFICO DE TENDENCIAS', 20, finalY);
     finalY += 15;
 
-    const captureChart = async (ref: React.RefObject<HTMLDivElement>) => {
+    const captureChart = async (ref: React.RefObject<HTMLDivElement | null>) => {
       if (!ref.current) return null;
       
       const canvas = await html2canvas(ref.current, {
         scale: 2,
         logging: false,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        allowTaint: true,
-        scrollX: 0,
-        scrollY: -window.scrollY,
-        onclone: (clonedDoc) => {
-          // You can modify the clone here if needed
-        }
+        useCORS: true
       });
       
       return {
@@ -232,7 +224,7 @@ export function CondicionesAmbientales() {
     const humImg = await captureChart(humChartRef);
     const presImg = await captureChart(presChartRef);
 
-    const drawChartWithLimits = (img: { data: string, ratio: number } | null, y: number, label: string) => {
+    const drawChartWithLimits = (img: { data: string, ratio: number } | null, y: number, _label: string) => {
       if (!img) return y;
       
       const chartWidth = pageWidth - 40;

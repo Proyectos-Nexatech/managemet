@@ -1,17 +1,19 @@
 import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, type Node } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { AlertTriangle, CheckCircle, FileText, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 import { type TraceabilityNode } from '../../services/traceability';
 
-interface EquipmentNodeData {
+interface EquipmentNodeData extends Record<string, unknown> {
   node: TraceabilityNode;
   color: string;
 }
 
-export const EquipmentNode = memo(({ data }: NodeProps) => {
-  const { node, color } = data as EquipmentNodeData;
+
+export const EquipmentNode = memo(({ data }: NodeProps<Node<EquipmentNodeData>>) => {
+  const { node, color } = data;
+
   const { equipment, isExpired, isMagnitudeMismatch, uncertaintyWarning } = node;
 
   const hasAlert = isExpired || isMagnitudeMismatch || uncertaintyWarning;

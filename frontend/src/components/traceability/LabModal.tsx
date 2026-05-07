@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Save, Loader2, Building } from 'lucide-react';
+import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '@/components/ui/button';
 import { traceabilityService, type ExternalLaboratory } from '../../services/traceability';

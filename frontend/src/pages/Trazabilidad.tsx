@@ -17,7 +17,8 @@ import {
 import type { Node, Edge, Connection } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { traceabilityService, type TraceableEquipment, type ExternalLaboratory, type TraceabilityNode } from '../services/traceability';
-import { magnitudesService, type Magnitude } from '../services/magnitudes';
+// import { magnitudesService, type Magnitude } from '../services/magnitudes';
+
 import { useAuth } from '../contexts/AuthContext';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -126,13 +127,14 @@ export function Trazabilidad() {
 
   const [allEquipment, setAllEquipment] = useState<TraceableEquipment[]>([]);
   const [labs, setLabs] = useState<ExternalLaboratory[]>([]);
-  const [magnitudes, setMagnitudes] = useState<Magnitude[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [fullTree, setFullTree] = useState<TraceabilityNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('eq'));
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
   const [isLabModalOpen, setIsLabModalOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -148,15 +150,13 @@ export function Trazabilidad() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [eq, ls, mg] = await Promise.all([
+      const [eqData, labData] = await Promise.all([
         traceabilityService.getAll(),
-        traceabilityService.getLaboratories(),
-        magnitudesService.getAll(),
+        traceabilityService.getLaboratories()
       ]);
-      setAllEquipment(eq);
-      setLabs(ls);
-      setMagnitudes(mg);
-      setFullTree(traceabilityService.buildTree(eq));
+      setAllEquipment(eqData);
+      setLabs(labData);
+      setFullTree(traceabilityService.buildTree(eqData));
     } catch (err) {
       console.error(err);
     } finally {
@@ -368,7 +368,6 @@ export function Trazabilidad() {
         onClose={() => setIsLinkModalOpen(false)}
         allEquipment={allEquipment}
         labs={labs}
-        magnitudes={magnitudes}
         initialEquipment={selectedEquipment}
         onSaved={fetchData}
       />

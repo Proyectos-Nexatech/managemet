@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Loader2, Upload, AlertTriangle, Plus, X, Building2, ChevronDown } from 'lucide-react';
+import { Save, Loader2, Upload, AlertTriangle, Plus, X, Building2 } from 'lucide-react';
+
 import { Modal } from '../ui/Modal';
 import { Button } from '@/components/ui/button';
 import { traceabilityService, type TraceableEquipment, type ExternalLaboratory } from '../../services/traceability';
-import { type Magnitude } from '../../services/magnitudes';
 import clsx from 'clsx';
+
 
 const LEVELS = ['INM', 'Patrón Nacional', 'Patrón de Referencia', 'Patrón de Trabajo', 'Equipo de Trabajo'] as const;
 const EXTERNAL_PATRON_VALUE = '__NEW_EXTERNAL__';
@@ -14,12 +15,12 @@ interface Props {
   onClose: () => void;
   allEquipment: TraceableEquipment[];
   labs: ExternalLaboratory[];
-  magnitudes: Magnitude[];
   initialEquipment: TraceableEquipment | null;
   onSaved: () => void;
 }
 
 interface ExternalPatronForm {
+
   name: string;
   internal_id: string;
   serial_number: string;
@@ -37,7 +38,8 @@ const emptyExternalPatron: ExternalPatronForm = {
   traceability_level: 'Patrón de Referencia',
 };
 
-export function LinkModal({ isOpen, onClose, allEquipment, labs, magnitudes, initialEquipment, onSaved }: Props) {
+export function LinkModal({ isOpen, onClose, allEquipment, labs, initialEquipment, onSaved }: Props) {
+
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState({
     parent_equipment_id: '',
@@ -150,13 +152,6 @@ export function LinkModal({ isOpen, onClose, allEquipment, labs, magnitudes, ini
 
   const inputCls = "w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all";
   const labelCls = "text-[10px] font-black text-slate-400 uppercase tracking-widest";
-
-  // Determine display for the current parent
-  const parentDisplay = createdExternalId
-    ? `✅ Patrón externo creado: ${createdExternalName}`
-    : form.parent_equipment_id
-      ? allEquipment.find(e => e.id === form.parent_equipment_id)?.name || 'Patrón externo vinculado'
-      : '';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Configurar Trazabilidad de Equipo" maxWidthClass="max-w-2xl">

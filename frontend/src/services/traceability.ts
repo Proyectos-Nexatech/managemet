@@ -78,8 +78,15 @@ export const traceabilityService = {
       `)
       .order('name');
     if (error) throw error;
-    return data as TraceableEquipment[];
+    
+    // Fix Supabase returning joins as arrays in some TS environments
+    return (data as any[]).map(item => ({
+      ...item,
+      magnitude: Array.isArray(item.magnitude) ? item.magnitude[0] : item.magnitude,
+      calibrating_lab: Array.isArray(item.calibrating_lab) ? item.calibrating_lab[0] : item.calibrating_lab
+    })) as TraceableEquipment[];
   },
+
 
   // Get root equipment (no parent = top of the chain)
   async getRoots(): Promise<TraceableEquipment[]> {
@@ -97,8 +104,15 @@ export const traceabilityService = {
       .is('parent_equipment_id', null)
       .order('name');
     if (error) throw error;
-    return data as TraceableEquipment[];
+
+    // Fix Supabase returning joins as arrays in some TS environments
+    return (data as any[]).map(item => ({
+      ...item,
+      magnitude: Array.isArray(item.magnitude) ? item.magnitude[0] : item.magnitude,
+      calibrating_lab: Array.isArray(item.calibrating_lab) ? item.calibrating_lab[0] : item.calibrating_lab
+    })) as TraceableEquipment[];
   },
+
 
 
   // Build a full traceability tree starting from a root equipment
