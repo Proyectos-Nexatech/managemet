@@ -153,47 +153,45 @@ export function ProgramaCalibracion() {
     }
   };
 
-  const getEventsForDay = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = [];
+  const allProgrammedEvents = useMemo(() => {
+    // 1. Start with confirmed schedule items
+    const events: any[] = schedule.map(s => ({
+      ...s,
+      equipment: equipmentList.find(eq => eq.id === s.equipment_id)
+    }));
 
+    // 2. Add suggested events for equipment not yet scheduled
     equipmentList.forEach(e => {
-      // Show equipment that are active, pending calibration or even in maintenance
-      // Only hide if specifically 'out_of_service'
       if (e.status !== 'out_of_service' && e.last_calibration_date && (e.calibration_period_days || 0) > 0) {
-        
-        // Use a safer date parsing (manual to avoid TZ shifts for YYYY-MM-DD strings)
         const [year, month, day] = e.last_calibration_date.split('-').map(Number);
         const lastDate = new Date(year, month - 1, day);
         const nextDate = addDays(lastDate, e.calibration_period_days);
         const nextDateStr = format(nextDate, 'yyyy-MM-dd');
 
-        if (nextDateStr === dateStr) {
-          const realEvent = schedule.find(s => s.equipment_id === e.id);
-          
-          if (realEvent) {
-             events.push({
-                ...realEvent,
-                scheduled_date: nextDateStr,
-                equipment: e
-             });
-          } else {
-             events.push({
-                id: `suggested-${e.id}`,
-                equipment_id: e.id,
-                scheduled_date: nextDateStr,
-                status: 'suggested' as const,
-                work_order_no: 'Sugerida',
-                equipment: e
-             });
-          }
+        // Check if already in schedule
+        const isScheduled = schedule.some(s => s.equipment_id === e.id);
+        
+        if (!isScheduled) {
+          events.push({
+            id: `suggested-${e.id}`,
+            equipment_id: e.id,
+            scheduled_date: nextDateStr,
+            status: 'suggested' as const,
+            work_order_no: 'Sugerida',
+            equipment: e
+          });
         }
       }
     });
 
-    return events;
+    return events.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+  }, [schedule, equipmentList]);
+
+  const getEventsForDay = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return allProgrammedEvents.filter(e => e.scheduled_date === dateStr);
   };
+
 
   // View data calculation
   const viewDays = useMemo(() => {
@@ -211,21 +209,28 @@ export function ProgramaCalibracion() {
   }, [currentDate, viewMode]);
 
   const allEvents = useMemo(() => {
-    const events: any[] = [];
-    viewDays.forEach(day => {
-      const dayEvents = getEventsForDay(day);
-      events.push(...dayEvents);
-    });
+    let baseEvents: any[];
+    
+    if (viewMode === 'list') {
+      // List shows EVERYTHING
+      baseEvents = allProgrammedEvents;
+    } else {
+      // Calendar modes filter by period
+      const days = viewDays.map(d => format(d, 'yyyy-MM-dd'));
+      baseEvents = allProgrammedEvents.filter(e => days.includes(e.scheduled_date));
+    }
     
     if (searchTerm) {
-      return events.filter(e => 
-        e.equipment?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.equipment?.internal_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.work_order_no?.toLowerCase().includes(searchTerm.toLowerCase())
+      const lowerSearch = searchTerm.toLowerCase();
+      return baseEvents.filter(e => 
+        e.equipment?.name?.toLowerCase().includes(lowerSearch) ||
+        e.equipment?.internal_id?.toLowerCase().includes(lowerSearch) ||
+        e.work_order_no?.toLowerCase().includes(lowerSearch)
       );
     }
-    return events;
-  }, [viewDays, equipmentList, schedule, searchTerm]);
+    return baseEvents;
+  }, [allProgrammedEvents, viewDays, viewMode, searchTerm]);
+
 
 
 
