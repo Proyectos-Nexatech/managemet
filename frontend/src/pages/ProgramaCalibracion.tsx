@@ -13,8 +13,12 @@ import {
   Tag,
   Settings,
   Hash,
-  CalendarDays
+  CalendarDays,
+  LayoutList,
+  Search
 } from 'lucide-react';
+
+
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Modal } from '../components/ui/Modal';
@@ -45,7 +49,8 @@ const getMetrologicalStatus = (e: Equipment) => {
   return { label: 'Vigente', color: 'bg-green-500', text: 'text-white shadow-green-200' };
 };
 
-type ViewMode = 'day' | 'week' | 'month';
+type ViewMode = 'day' | 'week' | 'month' | 'list';
+
 
 export function ProgramaCalibracion() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -57,6 +62,8 @@ export function ProgramaCalibracion() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
 
   // Manual Form State
   const [newManual, setNewManual] = useState({
@@ -148,9 +155,9 @@ export function ProgramaCalibracion() {
 
   // View data calculation
   const viewDays = useMemo(() => {
-    if (viewMode === 'month') {
-      const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
-      const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
+    if (viewMode === 'month' || viewMode === 'list') {
+      const start = startOfMonth(currentDate);
+      const end = endOfMonth(currentDate);
       return eachDayOfInterval({ start, end });
     } else if (viewMode === 'week') {
       const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -160,6 +167,24 @@ export function ProgramaCalibracion() {
       return [currentDate];
     }
   }, [currentDate, viewMode]);
+
+  const allEvents = useMemo(() => {
+    const events: any[] = [];
+    viewDays.forEach(day => {
+      const dayEvents = getEventsForDay(day);
+      events.push(...dayEvents);
+    });
+    
+    if (searchTerm) {
+      return events.filter(e => 
+        e.equipment?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.equipment?.internal_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.work_order_no?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    return events;
+  }, [viewDays, equipmentList, schedule, searchTerm]);
+
 
   const getEventsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -245,22 +270,23 @@ export function ProgramaCalibracion() {
                         <h2 className="text-xl font-black text-slate-800 capitalize leading-tight">
                            {format(currentDate, viewMode === 'day' ? 'dd MMMM yyyy' : 'MMMM yyyy', { locale: es })}
                         </h2>
-                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">Vista {viewMode === 'month' ? 'Mensual' : viewMode === 'week' ? 'Semanal' : 'Diaria'}</span>
+                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">Vista {viewMode === 'month' ? 'Mensual' : viewMode === 'week' ? 'Semanal' : viewMode === 'day' ? 'Diaria' : 'Lista'}</span>
                      </div>
                   </div>
 
                   <div className="flex items-center gap-4">
                      <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
-                        {(['day', 'week', 'month'] as ViewMode[]).map((mode) => (
+                        {(['day', 'week', 'month', 'list'] as ViewMode[]).map((mode) => (
                            <button
                              key={mode}
                              onClick={() => setViewMode(mode)}
                              className={clsx(
-                                "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
                                 viewMode === mode ? "bg-white text-slate-800 shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
                              )}
                            >
-                             {mode === 'day' ? 'Día' : mode === 'week' ? 'Semana' : 'Mes'}
+                             {mode === 'list' && <LayoutList className="w-3.5 h-3.5" />}
+                             {mode === 'day' ? 'Día' : mode === 'week' ? 'Semana' : mode === 'month' ? 'Mes' : 'Lista'}
                            </button>
                         ))}
                      </div>
@@ -284,6 +310,103 @@ export function ProgramaCalibracion() {
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Sincronizando programa...</p>
                  </div>
+               ) : viewMode === 'list' ? (
+                   <div className="flex-1 flex flex-col min-h-0">
+                      <div className="mb-4 relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                          type="text"
+                          placeholder="Buscar por equipo, ID o nro de orden..."
+                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="flex-1 overflow-auto custom-scrollbar">
+                        <table className="w-full">
+                          <thead className="sticky top-0 bg-white z-10">
+                            <tr className="border-b border-slate-100">
+                              <th className="text-left py-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Equipo / Instrumento</th>
+                              <th className="text-left py-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nro Orden</th>
+                              <th className="text-left py-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha Programada</th>
+                              <th className="text-left py-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
+                              <th className="text-center py-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {allEvents.map((e) => {
+                              const metStatus = e.equipment ? getMetrologicalStatus(e.equipment) : { label: '---', color: 'bg-slate-200', text: 'text-slate-600' };
+                              return (
+                                <tr key={e.id} className="group hover:bg-slate-50/50 transition-all">
+                                  <td className="py-4 px-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className={clsx("w-2 h-10 rounded-full", metStatus.color)} />
+                                      <div>
+                                        <p className="text-sm font-black text-slate-800">{e.equipment?.name}</p>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] font-black text-primary uppercase tracking-widest">{e.equipment?.internal_id}</span>
+                                          <span className="text-[10px] font-bold text-slate-400">{e.equipment?.magnitude?.name}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <span className={clsx(
+                                      "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
+                                      e.status === 'suggested' ? "bg-slate-100 text-slate-400 border border-dashed border-slate-200" : "bg-primary/10 text-primary"
+                                    )}>
+                                      {e.work_order_no}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <div className="flex items-center gap-2 text-slate-600">
+                                      <CalendarIcon className="w-3.5 h-3.5 text-slate-300" />
+                                      <span className="text-sm font-bold">
+                                        {format(new Date(e.scheduled_date + 'T12:00:00'), "dd 'de' MMMM, yyyy", { locale: es })}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <div className={clsx(
+                                      "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest w-fit shadow-sm",
+                                      metStatus.color, metStatus.text
+                                    )}>
+                                      {metStatus.label}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <div className="flex justify-center">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => {
+                                          setSelectedEvent(e);
+                                          setIsDetailModalOpen(true);
+                                        }}
+                                        className="h-9 px-4 rounded-xl font-black text-[10px] text-slate-400 hover:text-primary hover:bg-primary/5 transition-all"
+                                      >
+                                        DETALLES
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {allEvents.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="py-20 text-center">
+                                  <div className="flex flex-col items-center gap-2">
+                                    <CalendarDays className="w-12 h-12 text-slate-100" />
+                                    <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No hay eventos programados en este periodo</p>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                   </div>
                ) : (
                  <div className={clsx(
                     "grid gap-2 h-full overflow-y-auto pr-1 flex-1 custom-scrollbar",
