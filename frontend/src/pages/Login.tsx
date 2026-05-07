@@ -77,8 +77,9 @@ export function Login() {
             </Button>
           </form>
 
-          <div className="text-center">
-             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none">© 2026 Bustillo Ingeniería</p>
+          <div className="text-center space-y-1">
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Powering Progress</p>
+             <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">© 2026 Nexatech · Todos los derechos reservados</p>
           </div>
         </div>
       </Card>
