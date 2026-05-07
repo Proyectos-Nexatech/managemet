@@ -16,8 +16,10 @@ export interface Equipment {
   last_calibration_date: string | null;
   image_url: string | null;
   classification: 'Equipo de Referencia' | 'Equipo de Trabajo' | 'Equipo Auxiliar' | null;
+  is_external: boolean;
   created_at: string;
 }
+
 
 export const equipmentService = {
   async getAll() {

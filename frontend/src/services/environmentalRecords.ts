@@ -81,5 +81,15 @@ export const environmentalService = {
     
     if (error) throw error;
     return data as EnvironmentalLimit;
+  },
+
+  async bulkCreate(records: Partial<EnvironmentalRecord>[]) {
+    const { data, error } = await supabase
+      .from('environmental_records')
+      .insert(records)
+      .select();
+    
+    if (error) throw error;
+    return data as EnvironmentalRecord[];
   }
 };

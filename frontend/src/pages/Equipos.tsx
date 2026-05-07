@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import { 
   Plus, 
   Search, 
@@ -17,8 +19,10 @@ import {
   X,
   Download,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  GitBranch
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { equipmentService, type Equipment } from '../services/equipment';
 import { magnitudesService, type Magnitude } from '../services/magnitudes';
@@ -50,7 +54,9 @@ const statusLabelMap: Record<string, string> = {
 };
 
 export function Equipos() {
+  const navigate = useNavigate();
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
+
   const [magnitudes, setMagnitudes] = useState<Magnitude[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -270,8 +276,9 @@ export function Equipos() {
     const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || 
                           e.internal_id?.toLowerCase().includes(search.toLowerCase());
     const matchesMagnitude = magnitudeFilter === 'all' || e.magnitude_id === magnitudeFilter;
-    return matchesSearch && matchesMagnitude;
+    return matchesSearch && matchesMagnitude && !e.is_external;
   });
+
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -434,6 +441,13 @@ export function Equipos() {
                       </td>
                       <td className="py-6 px-8">
                         <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => navigate(`/trazabilidad?eq=${equipment.id}`)}
+                            className="p-2.5 text-slate-400 hover:text-primary hover:bg-white hover:shadow-xl hover:shadow-primary/10 rounded-xl transition-all active:scale-90"
+                            title="Ver Trazabilidad"
+                          >
+                            <GitBranch className="w-4 h-4" />
+                          </button>
                           <button 
                             onClick={() => handleEdit(equipment)}
                             className="p-2.5 text-slate-400 hover:text-primary hover:bg-white hover:shadow-xl hover:shadow-primary/10 rounded-xl transition-all active:scale-90"

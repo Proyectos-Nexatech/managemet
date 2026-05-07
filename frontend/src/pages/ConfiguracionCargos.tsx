@@ -10,21 +10,34 @@ import {
   Loader2,
   FileCheck2,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck,
+  Eye,
+  FileText,
+  UserCheck,
+  Search
 } from 'lucide-react';
+
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Modal } from '../components/ui/Modal';
 import { PermissionGuard } from '../components/PermissionGuard';
 import { jobPositionsService, type JobPosition, type JobProfile, type EducationRequirement } from '../services/jobPositions';
-import { personnelService, type Competency } from '../services/personnel';
+import { personnelService, type Competency, type Personnel } from '../services/personnel';
+import { personnelComplianceService, type PersonnelAuthorization, type PersonnelSupervision } from '../services/personnelCompliance';
 import { magnitudesService, type Magnitude } from '../services/magnitudes';
 import { useAuth } from '../contexts/AuthContext';
 import clsx from 'clsx';
 
+
 export function ConfiguracionCargos() {
-  const [activeTab, setActiveTab] = useState<'positions' | 'profiles' | 'education'>('positions');
+  const [activeTab, setActiveTab] = useState<'positions' | 'profiles' | 'education' | 'authorization' | 'supervision'>('positions');
   const [positions, setPositions] = useState<JobPosition[]>([]);
+  const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
+  const [authorizations, setAuthorizations] = useState<PersonnelAuthorization[]>([]);
+  const [supervisions, setSupervisions] = useState<PersonnelSupervision[]>([]);
+
   const [competencies, setCompetencies] = useState<Competency[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<JobPosition | null>(null);
   
@@ -51,26 +64,58 @@ export function ConfiguracionCargos() {
   const [isEducationModalOpen, setIsEducationModalOpen] = useState(false);
   const [newEducationReq, setNewEducationReq] = useState<Partial<EducationRequirement>>({ req_type: 'degree', description: '', is_mandatory: true });
 
+  // Authorization Modal
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [newAuth, setNewAuth] = useState<Partial<PersonnelAuthorization>>({ 
+    authorized_activity: '', scope: '', authorized_by: '', authorization_date: '', is_active: true 
+  });
+
+  // Supervision Modal
+  const [isSupervisionModalOpen, setIsSupervisionModalOpen] = useState(false);
+  const [newSupervision, setNewSupervision] = useState<Partial<PersonnelSupervision>>({ 
+    supervisor_name: '', activity_supervised: '', result: 'satisfactory', supervision_date: '' 
+  });
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [posData, compData, magData] = await Promise.all([
+      const [posData, compData, magData, perData] = await Promise.all([
         jobPositionsService.getJobPositions(),
         personnelService.getCompetencies(),
-        magnitudesService.getAll()
+        magnitudesService.getAll(),
+        personnelService.getPersonnel()
       ]);
       setPositions(posData);
       setCompetencies(compData);
       setMagnitudes(magData);
+      setPersonnel(perData);
+      
       if (posData.length > 0 && !selectedPosition) {
         setSelectedPosition(posData[0]);
+      }
+      if (perData.length > 0 && !selectedPerson) {
+        setSelectedPerson(perData[0]);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
-  }, [selectedPosition]);
+  }, [selectedPosition, selectedPerson]);
+
+  const fetchComplianceDetails = useCallback(async (personId: string) => {
+    try {
+      const [authData, supData] = await Promise.all([
+        personnelComplianceService.getAuthorizations(personId),
+        personnelComplianceService.getSupervisions(personId)
+      ]);
+      setAuthorizations(authData);
+      setSupervisions(supData);
+    } catch (error) {
+      console.error('Error fetching compliance details:', error);
+    }
+  }, []);
+
 
   const fetchPositionDetails = useCallback(async (positionId: string) => {
     try {
@@ -93,7 +138,14 @@ export function ConfiguracionCargos() {
     if (selectedPosition) {
       fetchPositionDetails(selectedPosition.id);
     }
-  }, [selectedPosition]);
+  }, [selectedPosition, fetchPositionDetails]);
+
+  useEffect(() => {
+    if (selectedPerson) {
+      fetchComplianceDetails(selectedPerson.id);
+    }
+  }, [selectedPerson, fetchComplianceDetails]);
+
 
   const handleSavePosition = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,6 +252,65 @@ export function ConfiguracionCargos() {
     }
   };
 
+  const handleSaveAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPerson) return;
+    setIsSubmitting(true);
+    try {
+      await personnelComplianceService.createAuthorization({
+        ...newAuth,
+        personnel_id: selectedPerson.id
+      });
+      setIsAuthModalOpen(false);
+      setNewAuth({ authorized_activity: '', scope: '', authorized_by: '', authorization_date: '', is_active: true });
+      fetchComplianceDetails(selectedPerson.id);
+    } catch (error) {
+      console.error('Error saving authorization:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteAuth = async (id: string) => {
+    if (!confirm('¿Estás seguro de revocar esta autorización?')) return;
+    try {
+      await personnelComplianceService.deleteAuthorization(id);
+      if (selectedPerson) fetchComplianceDetails(selectedPerson.id);
+    } catch (error) {
+      console.error('Error deleting auth:', error);
+    }
+  };
+
+  const handleSaveSupervision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPerson) return;
+    setIsSubmitting(true);
+    try {
+      await personnelComplianceService.createSupervision({
+        ...newSupervision,
+        personnel_id: selectedPerson.id
+      });
+      setIsSupervisionModalOpen(false);
+      setNewSupervision({ supervisor_name: '', activity_supervised: '', result: 'satisfactory', supervision_date: '' });
+      fetchComplianceDetails(selectedPerson.id);
+    } catch (error) {
+      console.error('Error saving supervision:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteSupervision = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este registro de supervisión?')) return;
+    try {
+      await personnelComplianceService.deleteSupervision(id);
+      if (selectedPerson) fetchComplianceDetails(selectedPerson.id);
+    } catch (error) {
+      console.error('Error deleting supervision:', error);
+    }
+  };
+
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -215,11 +326,13 @@ export function ConfiguracionCargos() {
         {[
           { id: 'positions', label: 'Cargos del Laboratorio', icon: Building2 },
           { id: 'profiles', label: 'Perfiles de Competencia', icon: Settings2 },
-          { id: 'education', label: 'Requisitos Educativos', icon: GraduationCap }
+          { id: 'education', label: 'Requisitos Educativos', icon: GraduationCap },
+          { id: 'authorization', label: 'Autorización del Personal', icon: ShieldCheck },
+          { id: 'supervision', label: 'Supervisión del Personal', icon: Eye }
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as 'positions' | 'profiles' | 'education')}
+            onClick={() => setActiveTab(tab.id as any)}
             className={clsx(
               "flex items-center gap-2 px-6 py-4 font-bold text-sm border-b-2 transition-all",
               activeTab === tab.id 
@@ -231,6 +344,7 @@ export function ConfiguracionCargos() {
             {tab.label}
           </button>
         ))}
+
       </div>
 
       {loading ? (
@@ -239,7 +353,7 @@ export function ConfiguracionCargos() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar for selecting position (visible in profiles and education tabs) */}
+          {/* Sidebar for selecting position (profiles/education) or person (auth/supervision) */}
           {(activeTab === 'profiles' || activeTab === 'education') && (
             <div className="lg:col-span-1 space-y-4">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Seleccionar Cargo</h3>
@@ -264,6 +378,32 @@ export function ConfiguracionCargos() {
               </div>
             </div>
           )}
+
+          {(activeTab === 'authorization' || activeTab === 'supervision') && (
+            <div className="lg:col-span-1 space-y-4">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Seleccionar Personal</h3>
+              <div className="space-y-2">
+                {personnel.map(per => (
+                  <button
+                    key={per.id}
+                    onClick={() => setSelectedPerson(per)}
+                    className={clsx(
+                      "w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all border",
+                      selectedPerson?.id === per.id 
+                        ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200" 
+                        : "bg-white text-slate-600 border-slate-100 hover:border-primary/30"
+                    )}
+                  >
+                    <div className="block truncate">{per.name}</div>
+                    <div className={clsx("text-[10px] mt-1 uppercase tracking-widest", selectedPerson?.id === per.id ? "text-slate-400" : "text-slate-400")}>
+                      {per.role}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
 
           {/* Main Content Area */}
           <div className={activeTab === 'positions' ? "lg:col-span-4" : "lg:col-span-3"}>
@@ -527,6 +667,147 @@ export function ConfiguracionCargos() {
                 </div>
               </div>
             )}
+
+            {/* AUTHORIZATION TAB */}
+            {activeTab === 'authorization' && selectedPerson && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] shadow-sm">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-800">Autorizaciones de Actividad</h2>
+                    <p className="text-sm font-bold text-slate-400">Personal: <span className="text-primary font-black">{selectedPerson.name}</span></p>
+                  </div>
+                  <PermissionGuard module="config_cargos" action="create">
+                    <Button 
+                      onClick={() => setIsAuthModalOpen(true)}
+                      className="rounded-[1rem] h-10 px-4 font-black bg-primary text-white hover:shadow-lg hover:shadow-primary/20 transition-all"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      OTORGAR AUTORIZACIÓN
+                    </Button>
+                  </PermissionGuard>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {authorizations.map(auth => (
+                    <Card key={auth.id} className="border-none shadow-sm rounded-2xl bg-white p-5 flex items-center justify-between border-l-4 border-l-green-500">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              Actividad Autorizada
+                            </span>
+                            {auth.is_active ? (
+                              <span className="px-2 py-0.5 rounded-md bg-green-50 text-green-500 text-[9px] font-bold uppercase tracking-wider">Vigente</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md bg-red-50 text-red-500 text-[9px] font-bold uppercase tracking-wider">Revocada</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-bold text-slate-700">{auth.authorized_activity}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Autorizado por: {auth.authorized_by} · {auth.authorization_date}</p>
+                          {auth.scope && <p className="text-xs text-slate-500 mt-1 italic">Alcance: {auth.scope}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {auth.document_url && (
+                          <a href={auth.document_url} target="_blank" rel="noreferrer" className="p-2 text-slate-400 hover:text-primary transition-colors">
+                            <FileText className="w-4 h-4" />
+                          </a>
+                        )}
+                        <PermissionGuard module="config_cargos" action="delete">
+                          <button onClick={() => handleDeleteAuth(auth.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </PermissionGuard>
+                      </div>
+                    </Card>
+                  ))}
+                  {authorizations.length === 0 && (
+                    <div className="p-12 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <p className="text-slate-400 font-bold text-sm">No hay autorizaciones registradas para este integrante.</p>
+                      <p className="text-slate-300 text-xs mt-1">Haga clic en el botón superior para otorgar una nueva autorización según 6.2.5 e).</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUPERVISION TAB */}
+            {activeTab === 'supervision' && selectedPerson && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] shadow-sm">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-800">Registros de Supervisión</h2>
+                    <p className="text-sm font-bold text-slate-400">Personal: <span className="text-primary font-black">{selectedPerson.name}</span></p>
+                  </div>
+                  <PermissionGuard module="config_cargos" action="create">
+                    <Button 
+                      onClick={() => setIsSupervisionModalOpen(true)}
+                      className="rounded-[1rem] h-10 px-4 font-black bg-slate-900 text-white hover:bg-black transition-all"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      REGISTRAR SUPERVISIÓN
+                    </Button>
+                  </PermissionGuard>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {supervisions.map(sup => (
+                    <Card key={sup.id} className={clsx(
+                      "border-none shadow-sm rounded-2xl bg-white p-5 flex items-center justify-between border-l-4",
+                      sup.result === 'satisfactory' ? "border-l-green-500" : sup.result === 'needs_improvement' ? "border-l-orange-500" : "border-l-red-500"
+                    )}>
+                      <div className="flex items-center gap-4">
+                        <div className={clsx(
+                          "w-10 h-10 rounded-xl flex items-center justify-center",
+                          sup.result === 'satisfactory' ? "bg-green-50 text-green-600" : sup.result === 'needs_improvement' ? "bg-orange-50 text-orange-600" : "bg-red-50 text-red-600"
+                        )}>
+                          <Eye className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              {sup.supervision_date}
+                            </span>
+                            <span className={clsx(
+                              "px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider",
+                              sup.result === 'satisfactory' ? "bg-green-50 text-green-500" : sup.result === 'needs_improvement' ? "bg-orange-50 text-orange-500" : "bg-red-50 text-red-500"
+                            )}>
+                              {sup.result === 'satisfactory' ? 'Satisfactorio' : sup.result === 'needs_improvement' ? 'Mejora Necesaria' : 'No Satisfactorio'}
+                            </span>
+                          </div>
+                          <p className="text-sm font-bold text-slate-700">{sup.activity_supervised}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Supervisor: {sup.supervisor_name}</p>
+                          {sup.observations && <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded-lg italic font-medium">"{sup.observations}"</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <PermissionGuard module="config_cargos" action="delete">
+                          <button onClick={() => handleDeleteSupervision(sup.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </PermissionGuard>
+                      </div>
+                    </Card>
+                  ))}
+                  {supervisions.length === 0 && (
+                    <div className="p-12 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
+                        <Eye className="w-6 h-6" />
+                      </div>
+                      <p className="text-slate-400 font-bold text-sm">No hay registros de supervisión para este integrante.</p>
+                      <p className="text-slate-300 text-xs mt-1">Cumpla con el requisito 6.2.5 d) registrando la supervisión de actividades técnicas.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             
           </div>
         </div>
@@ -621,6 +902,111 @@ export function ConfiguracionCargos() {
         </form>
       </Modal>
 
+      {/* Authorization Modal */}
+      <Modal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} title="Otorga Nueva Autorización">
+        <form onSubmit={handleSaveAuth} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Actividad a Autorizar</label>
+            <select 
+              required 
+              className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" 
+              value={newAuth.authorized_activity || ''} 
+              onChange={(e) => setNewAuth({...newAuth, authorized_activity: e.target.value})}
+            >
+              <option value="">-- Seleccionar Competencia --</option>
+              {competencies.map(comp => (
+                <option key={comp.id} value={comp.name}>{comp.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Alcance de la Autorización</label>
+            <textarea className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 h-20 resize-none" value={newAuth.scope || ''} onChange={(e) => setNewAuth({...newAuth, scope: e.target.value})} placeholder="Ej: Rango de 0 a 200g, Clase II y III..." />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Responsable que Autoriza</label>
+              <input required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newAuth.authorized_by || ''} onChange={(e) => setNewAuth({...newAuth, authorized_by: e.target.value})} placeholder="Nombre del Director" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Fecha de Autorización</label>
+              <input type="date" required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newAuth.authorization_date || ''} onChange={(e) => setNewAuth({...newAuth, authorization_date: e.target.value})} />
+            </div>
+          </div>
+          <div className="pt-4 flex gap-3">
+            <Button type="button" variant="outline" onClick={() => setIsAuthModalOpen(false)} className="flex-1 rounded-2xl font-black">CANCELAR</Button>
+            <Button type="submit" disabled={isSubmitting} className="flex-1 rounded-2xl font-black bg-primary text-white">
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              GUARDAR ACTA
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Supervision Modal */}
+      <Modal isOpen={isSupervisionModalOpen} onClose={() => setIsSupervisionModalOpen(false)} title="Registrar Supervisión del Personal">
+        <form onSubmit={handleSaveSupervision} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Actividad Supervisada</label>
+            <select 
+              required 
+              className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" 
+              value={newSupervision.activity_supervised || ''} 
+              onChange={(e) => setNewSupervision({...newSupervision, activity_supervised: e.target.value})}
+            >
+              <option value="">-- Seleccionar Competencia --</option>
+              {competencies.map(comp => (
+                <option key={comp.id} value={comp.name}>{comp.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Supervisor</label>
+              <input required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newSupervision.supervisor_name || ''} onChange={(e) => setNewSupervision({...newSupervision, supervisor_name: e.target.value})} placeholder="Nombre del Supervisor" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Fecha</label>
+              <input type="date" required className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" value={newSupervision.supervision_date || ''} onChange={(e) => setNewSupervision({...newSupervision, supervision_date: e.target.value})} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Resultado de la Supervisión</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'satisfactory', label: 'Satisfactorio', color: 'bg-green-50 text-green-600 border-green-200' },
+                { id: 'needs_improvement', label: 'Mejora Necesaria', color: 'bg-orange-50 text-orange-600 border-orange-200' },
+                { id: 'unsatisfactory', label: 'No Satisfactorio', color: 'bg-red-50 text-red-600 border-red-200' }
+              ].map(res => (
+                <button
+                  key={res.id}
+                  type="button"
+                  onClick={() => setNewSupervision({...newSupervision, result: res.id as any})}
+                  className={clsx(
+                    "py-3 px-2 rounded-xl border text-[10px] font-black uppercase transition-all",
+                    newSupervision.result === res.id ? res.color : "bg-white text-slate-400 border-slate-100"
+                  )}
+                >
+                  {res.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Observaciones</label>
+            <textarea className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 h-24 resize-none" value={newSupervision.observations || ''} onChange={(e) => setNewSupervision({...newSupervision, observations: e.target.value})} placeholder="Detalles de lo observado..." />
+          </div>
+          <div className="pt-4 flex gap-3">
+            <Button type="button" variant="outline" onClick={() => setIsSupervisionModalOpen(false)} className="flex-1 rounded-2xl font-black">CANCELAR</Button>
+            <Button type="submit" disabled={isSubmitting} className="flex-1 rounded-2xl font-black bg-slate-900 text-white">
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              REGISTRAR
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
     </div>
   );
 }
+

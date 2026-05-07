@@ -4,6 +4,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Magnitudes } from './pages/Magnitudes';
 import { Equipos } from './pages/Equipos';
+import { Trazabilidad } from './pages/Trazabilidad';
 import { Competencias } from './pages/Competencias';
 import { Calibraciones } from './pages/Calibraciones';
 import { Documentos } from './pages/Documentos';
@@ -80,6 +81,7 @@ function AppContent() {
         <Route path="/magnitudes" element={<Magnitudes />} />
         <Route path="/competencias" element={<Competencias />} />
         <Route path="/equipos" element={<Equipos />} />
+        <Route path="/trazabilidad" element={<Trazabilidad />} />
         <Route path="/calibraciones" element={<Calibraciones />} />
         <Route path="/documentos" element={<Documentos />} />
         <Route path="/programa" element={<ProgramaCalibracion />} />
