@@ -19,6 +19,9 @@ import { CondicionesAmbientales } from './pages/CondicionesAmbientales';
 import { Metodos } from './pages/Metodos';
 import { RevisionDireccion } from './pages/RevisionDireccion';
 import { Informes } from './pages/Informes';
+import { CertificateAcceptance } from './pages/CertificateAcceptance';
+import { MetrologicalConfirmation } from './pages/MetrologicalConfirmation';
+import { IntermediateChecks } from './pages/IntermediateChecks';
 import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { useEffect } from 'react';
@@ -82,6 +85,9 @@ function AppContent() {
         <Route path="/competencias" element={<Competencias />} />
         <Route path="/equipos" element={<Equipos />} />
         <Route path="/trazabilidad" element={<Trazabilidad />} />
+        <Route path="/aceptacion-certificados" element={<CertificateAcceptance />} />
+        <Route path="/confirmacion-metrologica" element={<MetrologicalConfirmation />} />
+        <Route path="/comprobaciones-intermedias" element={<IntermediateChecks />} />
         <Route path="/calibraciones" element={<Calibraciones />} />
         <Route path="/documentos" element={<Documentos />} />
         <Route path="/programa" element={<ProgramaCalibracion />} />

@@ -21,7 +21,8 @@ import {
   Thermometer,
   BookOpen,
   ChevronDown,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
@@ -51,6 +52,9 @@ const menuGroups = [
       { name: 'Competencias', href: '/competencias', icon: ShieldCheck, module: 'competencias' },
       { name: 'Equipos', href: '/equipos', icon: Activity, module: 'equipos' },
       { name: 'Trazabilidad', href: '/trazabilidad', icon: GitBranch, module: 'equipos' },
+      { name: 'Aceptación Cert.', href: '/aceptacion-certificados', icon: ClipboardCheck, module: 'equipos' },
+      { name: 'Confirmación Met.', href: '/confirmacion-metrologica', icon: Activity, module: 'equipos' },
+      { name: 'Comp. Intermedias', href: '/comprobaciones-intermedias', icon: RefreshCw, module: 'equipos' },
       { name: 'Magnitudes', href: '/magnitudes', icon: Layers, module: 'magnitudes' },
       { name: 'Condiciones Amb.', href: '/condiciones-ambientales', icon: Thermometer, module: 'condiciones_ambientales' },
     ],
