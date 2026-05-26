@@ -27,8 +27,7 @@ import { addDays, differenceInDays, format, startOfMonth, endOfMonth, addMonths 
 import { es } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
 import clsx from 'clsx';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, RadialBarChart, RadialBar } from 'recharts';
-
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 interface KPI {
   title: string;
   value: string | number;
@@ -326,20 +325,45 @@ export function Dashboard() {
             </h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estado global del laboratorio</p>
           </div>
-          <div className="flex-1 flex items-center justify-center relative min-h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart 
-                cx="50%" cy="100%" 
-                innerRadius="70%" outerRadius="100%" 
-                barSize={30} data={gaugeData} 
-                startAngle={180} endAngle={0}
-              >
-                <RadialBar background dataKey="value" cornerRadius={15} />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="absolute bottom-4 flex flex-col items-center">
-              <span className="text-4xl font-black text-slate-800 tracking-tighter">{gaugeData[0]?.value}%</span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Vigentes</span>
+          <div className="flex-1 flex flex-col items-center justify-end relative pb-2 pt-4">
+            <div className="w-full h-[120px] relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'fill', value: gaugeData[0]?.value || 0, fill: gaugeData[0]?.fill || '#3b82f6' },
+                      { name: 'empty', value: Math.max(0, 100 - (gaugeData[0]?.value || 0)), fill: '#f1f5f9' }
+                    ]}
+                    cx="50%" cy="100%"
+                    startAngle={180} endAngle={0}
+                    innerRadius="75%" outerRadius="100%"
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    <Cell fill={gaugeData[0]?.fill || '#3b82f6'} />
+                    <Cell fill="#f1f5f9" />
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              
+              {/* CSS Needle */}
+              <div className="absolute bottom-0 left-1/2 w-0 h-0 z-10 flex justify-center">
+                 {/* Rotating wrapper */}
+                 <div 
+                   className="absolute bottom-0 origin-bottom transition-transform duration-1000 ease-out flex justify-center"
+                   style={{ transform: `rotate(${ -90 + ((gaugeData[0]?.value || 0) / 100) * 180 }deg)` }}
+                 >
+                   {/* Needle Body */}
+                   <div className="w-1.5 h-[90px] bg-slate-800 rounded-t-full absolute bottom-1" />
+                 </div>
+                 {/* Center Dot */}
+                 <div className="w-5 h-5 bg-slate-800 rounded-full border-4 border-white shadow-sm absolute bottom-[-10px]" />
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-col items-center text-center">
+              <span className="text-4xl font-black text-slate-800 tracking-tighter leading-none">{gaugeData[0]?.value || 0}%</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">Vigentes</span>
             </div>
           </div>
         </Card>
