@@ -10,7 +10,6 @@ import {
   UserX,
   ClipboardList,
   ShieldCheck,
-  CalendarDays,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
   Gauge as GaugeIcon
@@ -81,16 +80,8 @@ function KPICard({ kpi }: { kpi: KPI }) {
   );
 }
 
-interface NextCalibration {
-  name: string;
-  internalId: string;
-  daysLeft: number;
-  date: string;
-}
-
 export function Dashboard() {
   const [kpis, setKpis] = useState<KPI[]>([]);
-  const [nextCalibrations, setNextCalibrations] = useState<NextCalibration[]>([]);
   const [equipmentStatusData, setEquipmentStatusData] = useState<any[]>([]);
   const [calibrationProjectionData, setCalibrationProjectionData] = useState<any[]>([]);
   const [gaugeData, setGaugeData] = useState<any[]>([]);
@@ -133,19 +124,6 @@ export function Dashboard() {
         const complianceRate = activeEquip.length > 0
           ? Math.round(((activeEquip.length - expiredCalib.length) / activeEquip.length) * 100)
           : 0;
-
-        // Next upcoming calibrations (within 60 days, sorted by soonest)
-        const upcoming: NextCalibration[] = activeEquip
-          .filter((e: any) => e.last_calibration_date && (e.calibration_period_days || 0) > 0)
-          .map((e: any) => {
-            const next = addDays(new Date(e.last_calibration_date), e.calibration_period_days);
-            const daysLeft = differenceInDays(next, now);
-            return { name: e.name, internalId: e.internal_id, daysLeft, date: format(next, "dd MMM", { locale: es }) };
-          })
-          .filter((e: any) => e.daysLeft >= 0 && e.daysLeft <= 60)
-          .sort((a: any, b: any) => a.daysLeft - b.daysLeft)
-          .slice(0, 6);
-        setNextCalibrations(upcoming);
 
         // --- Program Efficiency ---
         const scheduledThisMonth = sched.filter((s: any) => {
@@ -432,55 +410,6 @@ export function Dashboard() {
           </div>
         </Card>
       </div>
-
-      {/* Bottom: Next Calibrations Timeline */}
-      <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 lg:p-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="space-y-1">
-            <h3 className="text-lg font-black tracking-tight text-slate-800 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                <CalendarDays className="w-4 h-4 text-primary" />
-              </div>
-              Próximas Calibraciones
-            </h3>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Equipos que vencen en los próximos 60 días</p>
-          </div>
-        </div>
-
-        {nextCalibrations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-2">
-            <CheckCircle2 className="w-10 h-10 text-green-200" />
-            <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No hay calibraciones próximas a vencer</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {nextCalibrations.map((cal, i) => {
-              const urgency = cal.daysLeft <= 7 ? 'red' : cal.daysLeft <= 15 ? 'orange' : 'green';
-              return (
-                <div key={i} className={clsx(
-                  "flex items-center gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.01]",
-                  urgency === 'red' ? 'bg-red-50 border-red-100' : urgency === 'orange' ? 'bg-orange-50 border-orange-100' : 'bg-green-50 border-green-100'
-                )}>
-                  <div className={clsx(
-                    "w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm",
-                    urgency === 'red' ? 'bg-red-500 text-white' : urgency === 'orange' ? 'bg-orange-400 text-white' : 'bg-green-500 text-white'
-                  )}>
-                    <span className="text-lg font-black leading-none">{cal.daysLeft}</span>
-                    <span className="text-[8px] font-black uppercase tracking-wide leading-none mt-0.5">días</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black text-slate-800 truncate">{cal.name}</p>
-                    <p className={clsx("text-[10px] font-black uppercase tracking-widest",
-                      urgency === 'red' ? 'text-red-500' : urgency === 'orange' ? 'text-orange-500' : 'text-green-600'
-                    )}>{cal.internalId}</p>
-                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">Vence: {cal.date}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
