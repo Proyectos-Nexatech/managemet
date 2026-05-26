@@ -1,5 +1,4 @@
 import { 
-  Activity, 
   TrendingUp,
   TrendingDown,
   Thermometer,
@@ -8,11 +7,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileX,
-  Wrench,
   UserX,
   ClipboardList,
   ShieldCheck,
   CalendarDays,
+  PieChart as PieChartIcon,
+  BarChart as BarChartIcon,
+  Gauge as GaugeIcon
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useState, useEffect } from 'react';
@@ -23,10 +24,11 @@ import { equipmentService } from '../services/equipment';
 import { documentService } from '../services/documents';
 import { ncService } from '../services/nonConformities';
 import { scheduleService } from '../services/schedule';
-import { addDays, differenceInDays, format, startOfMonth, endOfMonth } from 'date-fns';
+import { addDays, differenceInDays, format, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
 import clsx from 'clsx';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, RadialBarChart, RadialBar } from 'recharts';
 
 interface KPI {
   title: string;
@@ -89,6 +91,9 @@ interface NextCalibration {
 export function Dashboard() {
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [nextCalibrations, setNextCalibrations] = useState<NextCalibration[]>([]);
+  const [equipmentStatusData, setEquipmentStatusData] = useState<any[]>([]);
+  const [calibrationProjectionData, setCalibrationProjectionData] = useState<any[]>([]);
+  const [gaugeData, setGaugeData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -124,7 +129,6 @@ export function Dashboard() {
           const d = differenceInDays(next, now);
           return d >= 0 && d <= 30;
         });
-        const inService = activeEquip.filter((e: any) => e.status === 'active');
         const inMaintenance = eq.filter((e: any) => e.status === 'maintenance').length;
         const complianceRate = activeEquip.length > 0
           ? Math.round(((activeEquip.length - expiredCalib.length) / activeEquip.length) * 100)
@@ -173,16 +177,47 @@ export function Dashboard() {
         const pendingReports = rr.filter((r: any) => r.status === 'draft' || r.status === 'review').length;
         const envAlerts = er.filter((r: any) => !r.within_limits).length;
 
+        // --- Equipment Status Data (Pie) ---
+        setEquipmentStatusData([
+          { name: 'Activos', value: activeEquip.length, color: '#3b82f6' },
+          { name: 'Mantenimiento', value: inMaintenance, color: '#f97316' },
+          { name: 'Fuera de Serv.', value: eq.filter((e: any) => e.status === 'out_of_service').length, color: '#ef4444' },
+        ]);
+
+        // --- Gauge Data (Radial Bar) ---
+        setGaugeData([
+          { name: 'Cumplimiento', value: complianceRate, fill: complianceRate >= 90 ? '#22c55e' : complianceRate >= 70 ? '#f59e0b' : '#ef4444' }
+        ]);
+
+        // --- Calibration Projection Data (Bar Chart) ---
+        const projectionMonths: any[] = [];
+        for (let i = 0; i < 6; i++) {
+          const d = addMonths(now, i);
+          projectionMonths.push({
+            month: format(d, 'MMM', { locale: es }).toUpperCase(),
+            year: d.getFullYear(),
+            monthIndex: d.getMonth(),
+            count: 0
+          });
+        }
+        
+        activeEquip.forEach((e: any) => {
+           if (e.last_calibration_date && (e.calibration_period_days || 0) > 0) {
+             const next = addDays(new Date(e.last_calibration_date), e.calibration_period_days);
+             const d = differenceInDays(next, now);
+             if (d >= 0 && d <= 180) {
+               const mIdx = next.getMonth();
+               const mYear = next.getFullYear();
+               const slot = projectionMonths.find(m => m.monthIndex === mIdx && m.year === mYear);
+               if (slot) {
+                 slot.count += 1;
+               }
+             }
+           }
+        });
+        setCalibrationProjectionData(projectionMonths);
+
         setKpis([
-          {
-            title: 'Cumplimiento Metrológico',
-            value: `${complianceRate}%`,
-            subtitle: `${inService.length} equipos con calibración vigente`,
-            trend: complianceRate >= 90 ? 'up' : complianceRate >= 70 ? 'neutral' : 'down',
-            trendLabel: complianceRate >= 90 ? 'Óptimo' : complianceRate >= 70 ? 'Aceptable' : 'Crítico',
-            icon: ShieldCheck,
-            color: 'primary',
-          },
           {
             title: 'Calibraciones Pendientes',
             value: expiredCalib.length,
@@ -202,15 +237,6 @@ export function Dashboard() {
             color: soonExpiring.length === 0 ? 'slate' : 'orange',
           },
           {
-            title: 'Equipos Activos',
-            value: activeEquip.length.toLocaleString(),
-            subtitle: `${inMaintenance} en mantenimiento`,
-            trend: 'neutral',
-            trendLabel: 'Total registrados',
-            icon: Activity,
-            color: 'blue',
-          },
-          {
             title: 'Eficiencia del Programa',
             value: `${efficiency}%`,
             subtitle: `${completedThisMonth}/${scheduledThisMonth.length} en el mes actual`,
@@ -227,15 +253,6 @@ export function Dashboard() {
             trendLabel: openNC === 0 ? 'Sin NC abiertas' : 'Requieren seguimiento',
             icon: FileX,
             color: openNC === 0 ? 'slate' : 'red',
-          },
-          {
-            title: 'Equipos en Mantenimiento',
-            value: inMaintenance,
-            subtitle: 'Fuera de servicio actualmente',
-            trend: inMaintenance === 0 ? 'up' : 'neutral',
-            trendLabel: inMaintenance === 0 ? 'Todos operativos' : 'En proceso',
-            icon: Wrench,
-            color: inMaintenance === 0 ? 'slate' : 'orange',
           },
           {
             title: 'Docs. por Vencer',
@@ -314,11 +331,106 @@ export function Dashboard() {
         </p>
       </div>
 
-      {/* KPI Grid */}
+      {/* KPI Grid (Non-redundant) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {kpis.map((kpi, i) => (
           <KPICard key={i} kpi={kpi} />
         ))}
+      </div>
+
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Gauge Chart */}
+        <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 flex flex-col">
+          <div className="mb-4 space-y-1">
+            <h3 className="text-sm font-black tracking-tight text-slate-800 flex items-center gap-2">
+               <GaugeIcon className="w-4 h-4 text-primary" /> Cumplimiento Metrológico
+            </h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estado global del laboratorio</p>
+          </div>
+          <div className="flex-1 flex items-center justify-center relative min-h-[220px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadialBarChart 
+                cx="50%" cy="100%" 
+                innerRadius="70%" outerRadius="100%" 
+                barSize={30} data={gaugeData} 
+                startAngle={180} endAngle={0}
+              >
+                <RadialBar background dataKey="value" cornerRadius={15} />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="absolute bottom-4 flex flex-col items-center">
+              <span className="text-4xl font-black text-slate-800 tracking-tighter">{gaugeData[0]?.value}%</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Vigentes</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Pie Chart */}
+        <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 flex flex-col">
+          <div className="mb-4 space-y-1">
+            <h3 className="text-sm font-black tracking-tight text-slate-800 flex items-center gap-2">
+               <PieChartIcon className="w-4 h-4 text-blue-500" /> Distribución de Equipos
+            </h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Por estado operativo</p>
+          </div>
+          <div className="flex-1 min-h-[180px] flex items-center justify-center -mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={equipmentStatusData}
+                  cx="50%" cy="50%"
+                  innerRadius={55} outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {equipmentStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip 
+                  formatter={(value: any) => [`${value} equipos`, 'Cantidad']}
+                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.08)' }}
+                  itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex justify-center flex-wrap gap-x-4 gap-y-2 mt-2">
+             {equipmentStatusData.map((item, i) => (
+               <div key={i} className="flex items-center gap-1.5">
+                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{item.name} ({item.value})</span>
+               </div>
+             ))}
+          </div>
+        </Card>
+
+        {/* Bar Chart */}
+        <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-[2rem] bg-white p-6 flex flex-col">
+          <div className="mb-4 space-y-1">
+            <h3 className="text-sm font-black tracking-tight text-slate-800 flex items-center gap-2">
+               <BarChartIcon className="w-4 h-4 text-orange-500" /> Proyección de Calibraciones
+            </h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Próximos 6 meses</p>
+          </div>
+          <div className="flex-1 min-h-[220px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={calibrationProjectionData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold', fill: '#94a3b8' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold', fill: '#94a3b8' }} />
+                <RechartsTooltip
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.08)' }}
+                  itemStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#0f172a' }}
+                />
+                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Calibraciones" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
       </div>
 
       {/* Bottom: Next Calibrations Timeline */}
