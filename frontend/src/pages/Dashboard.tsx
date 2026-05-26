@@ -336,7 +336,7 @@ export function Dashboard() {
                     ]}
                     cx="50%" cy="100%"
                     startAngle={180} endAngle={0}
-                    innerRadius="75%" outerRadius="100%"
+                    innerRadius={70} outerRadius={110}
                     dataKey="value"
                     stroke="none"
                   >
@@ -354,7 +354,7 @@ export function Dashboard() {
                    style={{ transform: `rotate(${ -90 + ((gaugeData[0]?.value || 0) / 100) * 180 }deg)` }}
                  >
                    {/* Needle Body */}
-                   <div className="w-1.5 h-[90px] bg-slate-800 rounded-t-full absolute bottom-1" />
+                   <div className="w-1.5 h-[90px] bg-slate-800 rounded-t-full absolute bottom-0" />
                  </div>
                  {/* Center Dot */}
                  <div className="w-5 h-5 bg-slate-800 rounded-full border-4 border-white shadow-sm absolute bottom-[-10px]" />
